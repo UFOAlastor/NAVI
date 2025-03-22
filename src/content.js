@@ -898,20 +898,49 @@ class SelectionHandler {
     }
 
     // 检查role属性
-    if (el.getAttribute('role') === 'textbox' || el.getAttribute('role') === 'searchbox') {
-      console.log('NAVI: 检测到textbox/searchbox角色元素');
+    if (el.getAttribute('role') === 'textbox' ||
+        el.getAttribute('role') === 'searchbox' ||
+        el.getAttribute('role') === 'combobox' ||
+        el.getAttribute('role') === 'input') {
+      console.log('NAVI: 检测到textbox/searchbox/combobox/input角色元素');
       return true;
     }
 
     // 检查特定的类名和属性，用于捕获自定义搜索框
     const classNames = el.className ? el.className.toLowerCase() : '';
+    const idName = el.id ? el.id.toLowerCase() : '';
     if (
       classNames.includes('search') ||
       classNames.includes('input') ||
+      classNames.includes('editor') ||
+      classNames.includes('field') ||
+      classNames.includes('form-control') ||
+      idName.includes('search') ||
+      idName.includes('input') ||
+      idName.includes('editor') ||
+      idName.includes('field') ||
       el.getAttribute('aria-autocomplete') === 'list' ||
-      el.getAttribute('data-search-input') !== null
+      el.getAttribute('aria-autocomplete') === 'both' ||
+      el.getAttribute('aria-autocomplete') === 'inline' ||
+      el.getAttribute('data-search-input') !== null ||
+      el.getAttribute('data-input') !== null ||
+      el.getAttribute('autocomplete') === 'on' ||
+      el.getAttribute('type') === 'search' ||
+      el.getAttribute('type') === 'text'
     ) {
-      console.log('NAVI: 检测到搜索框元素');
+      console.log('NAVI: 检测到搜索框/输入框元素');
+      return true;
+    }
+
+    // 检查元素是否有输入框样式特征
+    const computedStyle = window.getComputedStyle(el);
+    if (
+      (computedStyle.border && !computedStyle.border.includes('none')) &&
+      computedStyle.backgroundColor &&
+      computedStyle.padding &&
+      (computedStyle.cursor === 'text' || computedStyle.cursor === 'pointer')
+    ) {
+      console.log('NAVI: 检测到具有输入框样式特征的元素');
       return true;
     }
 
@@ -923,6 +952,16 @@ class SelectionHandler {
       el.getAttribute('title') === 'Search'
     )) {
       console.log('NAVI: 检测到Google搜索框');
+      return true;
+    }
+
+    // 检查父元素是否为表单元素
+    const parentForm = el.closest('form');
+    if (parentForm &&
+        (parentForm.getAttribute('role') === 'search' ||
+         parentForm.className.toLowerCase().includes('search') ||
+         parentForm.id.toLowerCase().includes('search'))) {
+      console.log('NAVI: 检测到搜索表单内元素');
       return true;
     }
 

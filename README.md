@@ -2,6 +2,8 @@
 
 NAVI是一个强大的浏览器划词翻译插件，支持多AI平台和本地模型，提供智能翻译和解释功能。
 
+![1742639034793](image/README/1742639034793.png)
+
 ## 主要特性
 
 - 支持多AI平台API（OpenAI、Gemini等）
@@ -10,21 +12,28 @@ NAVI是一个强大的浏览器划词翻译插件，支持多AI平台和本地�
 - 动态任务分配（翻译/解释）
 - 专业术语注释
 - 跨浏览器支持（Chrome/Edge）
+- 智能缓存系统，提高响应速度
+- 自动语言检测和领域识别
+- 流式响应显示，实时查看结果
+- 支持自定义API端点
 
 ## 安装说明
 
 1. 克隆仓库：
+
 ```bash
 git clone https://github.com/yourusername/navi.git
 cd navi
 ```
 
 2. 安装依赖：
+
 ```bash
 npm install
 ```
 
 3. 构建项目：
+
 ```bash
 npm run build
 ```
@@ -33,15 +42,16 @@ npm run build
    - 打开浏览器扩展管理页面
    - 启用开发者模式
    - 点击"加载已解压的扩展程序"
-   - 选择项目中的`dist`目录
+   - 选择项目中的 `dist`目录
 
 ## 配置说明
 
 1. 点击浏览器工具栏中的NAVI图标
 2. 在设置页面中：
-   - 选择默认AI服务
-   - 配置API密钥
+   - 选择默认AI服务（OpenAI/Ollama）
+   - 配置API密钥或服务地址
    - 设置Ollama服务器地址和模型
+   - 自定义响应格式和显示选项
 
 ## 使用方法
 
@@ -50,6 +60,15 @@ npm run build
    - 外语文本 → 翻译
    - 专业术语 → 解释+百科补充
    - 混合模式 → 翻译+术语注释
+3. 系统会使用智能缓存提高响应速度
+4. 支持流式响应，结果将实时显示
+
+## 高级功能
+
+- **多模型切换**：可在OpenAI各模型和Ollama本地模型间快速切换
+- **并发控制**：内置限流器确保API稳定性
+- **智能重试**：网络问题自动重试，指数退避策略
+- **结果后处理**：自动格式化和清理结果文本
 
 ## 开发说明
 
@@ -84,16 +103,19 @@ NAVI 扩展需要访问本地运行的 Ollama 服务，这涉及到浏览器的�
 #### 如何正确启动 Ollama 服务？
 
 Windows CMD:
+
 ```cmd
 set OLLAMA_ORIGINS=* && ollama serve
 ```
 
 Windows PowerShell:
+
 ```powershell
 $env:OLLAMA_ORIGINS="*"; ollama serve
 ```
 
 Linux/macOS:
+
 ```bash
 OLLAMA_ORIGINS="*" ollama serve
 ```

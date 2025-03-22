@@ -41,7 +41,6 @@
   line-height: 1.5;
   color: var(--navi-color-text);
   border: 1px solid var(--navi-color-border);
-  cursor: move;
   user-select: none;
 }
 
@@ -51,15 +50,29 @@
 }
 
 .navi-draggable-area {
-  height: var(--navi-spacing-md);
+  position: relative;
+  height: 14px;
   margin: calc(-1 * var(--navi-spacing-md)) calc(-1 * var(--navi-spacing-md)) var(--navi-spacing-md) calc(-1 * var(--navi-spacing-md));
   background-color: var(--navi-color-background-light);
   border-radius: var(--navi-border-radius-lg) var(--navi-border-radius-lg) 0 0;
   cursor: grab;
+  box-sizing: border-box;
 }
 
 .navi-draggable-area:hover {
   background-color: var(--navi-color-background-hover);
+}
+
+.navi-draggable-area::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 4px;
+  background-color: #ccc;
+  border-radius: 2px;
 }
 
 /* 加载状态 */

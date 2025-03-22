@@ -4,6 +4,8 @@ class SelectionHandler {
   constructor() {
     this.popup = null;
     this.aiService = null;
+    this.isDragging = false;
+    this.wasDragging = false; // 添加标记，记录是否刚完成拖动
     this.init();
   }
 
@@ -80,39 +82,130 @@ class SelectionHandler {
 
   // 初始化拖动功能
   initDraggable() {
-    let isDragging = false;
-    let offsetX, offsetY;
+    // 使用实例变量而不是局部变量
+    let startX, startY; // 开始拖动时的鼠标位置
+    let startLeft, startTop; // 开始拖动时的弹窗位置
+    let dragStarted = false; // 标记是否已初始化拖动数据
 
     // 鼠标按下事件
     this.popup.addEventListener('mousedown', (e) => {
-      // 避免干扰内部元素的点击事件
-      if (e.target.classList.contains('navi-popup') || e.target.closest('.navi-draggable-area')) {
-        isDragging = true;
-        offsetX = e.clientX - this.popup.getBoundingClientRect().left;
-        offsetY = e.clientY - this.popup.getBoundingClientRect().top;
-        this.popup.style.cursor = 'grabbing';
+      // 只允许拖动区域触发拖动
+      if (e.target.classList.contains('navi-draggable-area')) {
         e.preventDefault();
+        e.stopPropagation();
+
+        // 获取当前弹窗的位置（从style中获取）
+        startLeft = parseInt(this.popup.style.left) || 0;
+        startTop = parseInt(this.popup.style.top) || 0;
+        startX = e.clientX;
+        startY = e.clientY;
+        dragStarted = true;
+
+        // 设置拖动状态
+        this.isDragging = true;
+        this.wasDragging = false;
+        e.target.style.cursor = 'grabbing';
+
+        // 添加调试日志
+        console.log('拖动初始化 - 初始位置:', { startLeft, startTop, startX, startY });
       }
     });
 
     // 鼠标移动事件
     document.addEventListener('mousemove', (e) => {
-      if (isDragging) {
-        const x = e.clientX - offsetX;
-        const y = e.clientY - offsetY;
-        this.popup.style.left = `${x}px`;
-        this.popup.style.top = `${y}px`;
+      if (this.isDragging && dragStarted) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // 计算鼠标移动的距离
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+
+        // 添加调试日志 - 每10px记录一次
+        if (Math.abs(deltaX) % 10 < 1 && Math.abs(deltaY) % 10 < 1) {
+          console.log('拖动中 - 位移:', { deltaX, deltaY });
+        }
+
+        // 根据鼠标移动距离计算新位置
+        const left = Math.round(startLeft + deltaX);
+        const top = Math.round(startTop + deltaY);
+
+        // 获取视口和文档信息
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
+        const safeDistance = 20; // 安全边距
+
+        // 获取弹窗尺寸
+        const popupWidth = this.popup.offsetWidth;
+        const popupHeight = this.popup.offsetHeight;
+
+        // 确保弹窗不超出视口边界
+        const safeLeft = Math.max(scrollLeft + safeDistance,
+                         Math.min(left, windowWidth + scrollLeft - popupWidth - safeDistance));
+        const safeTop = Math.max(scrollTop + safeDistance,
+                        Math.min(top, windowHeight + scrollTop - popupHeight - safeDistance));
+
+        // 设置弹窗新位置
+        this.popup.style.left = `${safeLeft}px`;
+        this.popup.style.top = `${safeTop}px`;
+
+        // 标记为已经移动
+        this.wasDragging = true;
       }
     });
 
     // 鼠标释放事件
-    document.addEventListener('mouseup', () => {
-      isDragging = false;
-      this.popup.style.cursor = '';
+    document.addEventListener('mouseup', (e) => {
+      if (this.isDragging) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // 恢复拖动区域的样式
+        const dragArea = this.popup.querySelector('.navi-draggable-area');
+        if (dragArea) {
+          dragArea.style.cursor = 'grab';
+        }
+
+        // 如果已经移动过，记录日志
+        if (dragStarted) {
+          console.log('拖动结束 - 最终位置:', {
+            left: this.popup.style.left,
+            top: this.popup.style.top
+          });
+        }
+
+        // 如果已经移动，设置一个短暂的定时器，阻止mouseup事件触发选择行为
+        if (this.wasDragging) {
+          // 设置一个短暂的定时器，在鼠标释放后一段时间内忽略选择事件
+          setTimeout(() => {
+            this.wasDragging = false;
+          }, 300);
+        } else {
+          // 如果没有实际拖动，立即重置状态
+          this.wasDragging = false;
+        }
+
+        // 重置拖动状态
+        this.isDragging = false;
+        dragStarted = false;
+      }
     });
   }
 
   async handleSelection(event) {
+    // 添加拖动状态检查，如果正在拖动则不处理选择事件
+    if (this.isDragging) {
+      return;
+    }
+
+    // 如果刚刚完成拖动，不触发选择
+    if (this.wasDragging) {
+      this.wasDragging = false;
+      return;
+    }
+
     console.log('NAVI: 划词事件被触发');
 
     const selection = window.getSelection();
@@ -265,6 +358,10 @@ class SelectionHandler {
   }
 
   hidePopup() {
+    // 如果正在拖动，不隐藏弹窗
+    if (this.isDragging) {
+      return;
+    }
     this.popup.style.display = 'none';
   }
 
@@ -366,10 +463,19 @@ class SelectionHandler {
   }
 
   showResultPopup(rect, result) {
+    // 如果正在拖动，不应该改变弹窗位置和显示状态
+    if (this.isDragging) {
+      return;
+    }
     this.showPopup(rect, this.formatResult(result));
   }
 
   showErrorPopup(rect, error) {
+    // 如果正在拖动，不应该改变弹窗位置和显示状态
+    if (this.isDragging) {
+      return;
+    }
+
     // 获取目标语言
     const config = this.config || { translationConfig: { targetLanguage: 'zh' } };
     const targetLang = config.translationConfig?.targetLanguage || 'zh';
@@ -432,8 +538,8 @@ class SelectionHandler {
 
     // 构建错误HTML
     const errorHTML = `
+      <div class="navi-draggable-area"></div>
       <div class="navi-error">
-        <div class="navi-draggable-area"></div>
         <div class="navi-error-icon">⚠️</div>
         <div class="navi-error-message">${errorInfo.message}</div>
         <div class="navi-error-hint">${errorInfo.hint}</div>
@@ -461,6 +567,27 @@ class SelectionHandler {
       return;
     }
 
+    // 如果正在拖动，只更新内容，不改变位置
+    if (this.isDragging) {
+      if (content) {
+        this.popup.innerHTML = content;
+      }
+      return;
+    }
+
+    // 保存弹窗当前状态
+    const isCurrentlyVisible = this.popup.style.display === 'block';
+    const currentLeft = isCurrentlyVisible ? this.popup.style.left : null;
+    const currentTop = isCurrentlyVisible ? this.popup.style.top : null;
+
+    // 如果弹窗位置已经设置过且我们要显示相同类型的内容，就保持位置不变
+    const isSameContentType = isCurrentlyVisible &&
+                             ((content.includes('navi-result') && this.popup.classList.contains('navi-popup-result')) ||
+                              (content.includes('navi-error') && this.popup.querySelector('.navi-error')));
+
+    // 记录当前是否有拖动区域，以便重建时能保留
+    const hasDraggableArea = this.popup.querySelector('.navi-draggable-area') !== null;
+
     // 清除旧内容和类名
     this.popup.innerHTML = content;
 
@@ -472,6 +599,14 @@ class SelectionHandler {
       this.popup.classList.add('navi-popup-result');
     }
     // loading类由showLoadingPopup方法直接添加，不在这里处理
+
+    // 检查是否应该保持当前位置
+    if (isSameContentType && currentLeft && currentTop) {
+      this.popup.style.left = currentLeft;
+      this.popup.style.top = currentTop;
+      this.popup.style.display = 'block';
+      return;
+    }
 
     // 定义与浏览器边缘的最小安全距离
     const safeDistance = 20; // 与浏览器边缘保持20px的安全距离
@@ -561,8 +696,8 @@ class SelectionHandler {
 
     // 构建结果HTML
     let resultHTML = `
+      <div class="navi-draggable-area"></div>
       <div class="navi-result">
-        <div class="navi-draggable-area"></div>
         <div class="navi-meta">
           <div class="navi-translation"><strong>${uiText.translation}:</strong> ${translation}</div>
           <div class="navi-domain"><strong>${uiText.domain}:</strong> ${domain}</div>

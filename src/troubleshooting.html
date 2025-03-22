@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>NAVI - Ollama 连接故障排除</title>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #444;
+      margin-top: 20px;
+    }
+    pre {
+      background: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    .error {
+      color: #c00;
+      font-weight: bold;
+    }
+    .solution {
+      color: #080;
+      font-weight: bold;
+    }
+    .note {
+      background: #fffde7;
+      padding: 10px;
+      border-left: 4px solid #ffc107;
+      margin: 15px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>NAVI - Ollama 连接故障排除指南</h1>
+
+  <div class="note">
+    此页面提供了连接本地 Ollama 服务的常见问题解决方案。
+  </div>
+
+  <h2>常见错误</h2>
+
+  <h3 class="error">错误 1: 创建 offscreen 文档失败</h3>
+  <p>错误信息: <code>TypeError: Error in invocation of offscreen.createDocument(...): Error at parameter 'parameters': Error at property 'reasons': Error at index 0: Value must be one of AUDIO_PLAYBACK, ...</code></p>
+  <p class="solution">解决方案:</p>
+  <p>这是一个已知的 Chrome 扩展 API 兼容性问题。NAVI 已自动回退到直接请求方式，您可以忽略此错误。</p>
+
+  <h3 class="error">错误 2: Ollama API 错误 (403)</h3>
+  <p>错误信息: <code>Ollama 生成请求错误: Error: Ollama API 错误 (403)</code></p>
+  <p class="solution">解决方案:</p>
+  <p>这个错误表明 Ollama 服务拒绝了来自浏览器扩展的请求，原因是缺少正确的 CORS 配置。请按照以下步骤解决:</p>
+  <ol>
+    <li>关闭当前运行的 Ollama 服务</li>
+    <li>使用以下命令重新启动 Ollama 服务:
+      <pre>OLLAMA_ORIGINS="*" ollama serve</pre>
+      在 Windows 上，使用 PowerShell:
+      <pre>$env:OLLAMA_ORIGINS="*"; ollama serve</pre>
+      或使用 CMD:
+      <pre>set OLLAMA_ORIGINS=* && ollama serve</pre>
+    </li>
+    <li>重新加载浏览器扩展</li>
+  </ol>
+
+  <h3 class="error">错误 3: Could not establish connection. Receiving end does not exist.</h3>
+  <p>错误信息: <code>Ollama 生成请求失败: Error: Could not establish connection. Receiving end does not exist.</code></p>
+  <p class="solution">解决方案:</p>
+  <p>这个错误与扩展的内部通信有关。NAVI 应该已经自动回退到直接请求方式，您可以忽略此错误。如果问题持续存在:</p>
+  <ol>
+    <li>确保您使用的是最新版本的 Chrome/Edge 浏览器</li>
+    <li>尝试关闭并重新打开浏览器</li>
+    <li>卸载并重新安装 NAVI 扩展</li>
+  </ol>
+
+  <h2>Ollama 服务启动注意事项</h2>
+
+  <p>为了让 NAVI 扩展能够正确连接到本地 Ollama 服务，请务必正确启动 Ollama:</p>
+
+  <div class="note">
+    <h3>为什么需要设置 OLLAMA_ORIGINS=*？</h3>
+    <p>这是因为浏览器的同源策略（Same-Origin Policy）限制：</p>
+    <ul>
+      <li>浏览器插件运行在独立的源（如 chrome-extension://）</li>
+      <li>本地 Ollama 服务默认运行在 http://localhost:11434</li>
+      <li>浏览器会因同源策略阻止跨域请求</li>
+      <li>设置 OLLAMA_ORIGINS=* 允许所有来源的请求访问 Ollama 服务</li>
+    </ul>
+    <p>当您设置 OLLAMA_ORIGINS=* 时，Ollama 服务会在响应头中添加 <code>Access-Control-Allow-Origin: *</code>，这样浏览器才会允许跨域请求。</p>
+  </div>
+
+  <h3>Linux/macOS:</h3>
+  <pre>OLLAMA_ORIGINS="*" ollama serve</pre>
+
+  <h3>Windows (PowerShell):</h3>
+  <pre>$env:OLLAMA_ORIGINS="*"; ollama serve</pre>
+
+  <h3>Windows (CMD):</h3>
+  <pre>set OLLAMA_ORIGINS=* && ollama serve</pre>
+
+  <div class="note">
+    <p><strong>安全提示:</strong> 设置 <code>OLLAMA_ORIGINS="*"</code> 将允许任何网站访问您的 Ollama 服务。这在开发环境中是安全的，但如果您的计算机连接到公共网络，请考虑使用更严格的设置。</p>
+  </div>
+
+  <h2>常见问题解答</h2>
+
+  <h3>Q: 为什么普通启动 Ollama 服务会导致 403 错误？</h3>
+  <p>A: 这是因为普通启动时，Ollama 服务默认只允许同源请求（如 localhost）。由于浏览器插件运行在不同的源（chrome-extension://），所以会被拦截。</p>
+
+  <h3>Q: 如何让 Ollama 服务开机自启动？</h3>
+  <p>A: 在 Windows 系统中，您可以：</p>
+  <ol>
+    <li>创建一个批处理文件（如 start_ollama.bat）：
+      <pre>@echo off
+set OLLAMA_ORIGINS=*
+"C:\Program Files\Ollama\ollama.exe" serve</pre>
+    </li>
+    <li>打开任务计划程序（Task Scheduler）</li>
+    <li>创建新任务，设置为"登录时"运行该批处理文件</li>
+  </ol>
+
+  <h2>联系支持</h2>
+  <p>如果您尝试了上述所有解决方案后问题仍然存在，请提供以下信息:</p>
+  <ol>
+    <li>您的操作系统和版本</li>
+    <li>您的浏览器和版本</li>
+    <li>Ollama 服务的版本 (使用 <code>ollama --version</code> 查看)</li>
+    <li>浏览器控制台中的完整错误信息</li>
+    <li>您启动 Ollama 服务的确切命令</li>
+  </ol>
+</body>
+</html>

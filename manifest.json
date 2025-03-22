@@ -9,7 +9,11 @@
     "scripting",
     "tabs",
     "contextMenus",
-    "webRequest"
+    "webRequest",
+    "declarativeNetRequestWithHostAccess",
+    "declarativeNetRequestFeedback",
+    "declarativeNetRequest",
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -42,6 +46,6 @@
     "128": "icons/icon128.png"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   }
 }

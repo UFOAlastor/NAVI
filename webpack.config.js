@@ -5,7 +5,8 @@ module.exports = {
   entry: {
     background: './src/background.js',
     content: './src/content.js',
-    popup: './src/popup.js'
+    popup: './src/popup.js',
+    offscreen: './src/offscreen.js'
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
@@ -35,6 +36,8 @@ module.exports = {
         { from: 'manifest.json', to: 'manifest.json' },
         { from: 'src/popup.html', to: 'popup.html' },
         { from: 'src/content.css', to: 'content.css' },
+        { from: 'src/offscreen.html', to: 'offscreen.html' },
+        { from: 'src/troubleshooting.html', to: 'troubleshooting.html' },
         { from: 'icons', to: 'icons' }
       ]
     })

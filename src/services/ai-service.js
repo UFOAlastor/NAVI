@@ -471,27 +471,26 @@ class OllamaService extends AIService {
   async translate(text, targetLang) {
     return this.withCache('translate', text, { targetLang }, async () => {
       try {
-        const prompt = `你是一个专业的翻译和分析助手。
-请处理以下文本并返回三个信息：
+        const prompt = `你是一个专业的翻译和分析助手。请处理以下文本并返回三个信息：
 1. 将文本翻译成${targetLang}
 2. 提供一句话简短解释其含义（通俗易懂，让外行也能理解）
 3. 确定文本所属的专业领域（如：计算机、医学、法律、经济等）
 
-请按照以下JSON格式返回结果:
-{
+返回格式为JSON: {
   "translated": "翻译结果",
   "explanation": "一句话解释",
   "domain": "所属领域"
 }
 
-以下是需要处理的文本:
-${text}`;
+需要处理的文本: ${text}`;
 
         const result = await this.makeRequest(prompt);
 
         // 尝试解析JSON结果
         try {
-          const parsedResult = JSON.parse(result);
+          // 清理可能的Markdown代码块标记
+          const cleanResult = result.replace(/```json\s*|\s*```/g, '').trim();
+          const parsedResult = JSON.parse(cleanResult);
           return {
             translated: parsedResult.translated || result,
             explanation: parsedResult.explanation || "无法获取解释",

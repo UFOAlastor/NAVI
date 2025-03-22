@@ -1,5 +1,11 @@
 import { AIServiceFactory } from './services/ai-service';
 
+// 允许访问的本地服务域名白名单
+const allowedDomains = [
+  "localhost",
+  "127.0.0.1"
+];
+
 // 初始化配置
 const defaultConfig = {
   defaultService: 'openai',
@@ -51,12 +57,21 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
     // 生成文本请求
     if (request.action === "GENERATE") {
-      makeOllamaRequest(request.baseUrl, request.model, request.prompt)
+      // 尝试先使用offscreen API
+      makeOllamaRequestViaOffscreen(request.baseUrl, request.model, request.prompt)
         .then(result => {
           sendResponse({ success: true, data: result });
         })
         .catch(error => {
           console.error("Ollama生成请求失败:", error);
+          // 如果offscreen方式失败，尝试直接请求
+          return makeOllamaRequest(request.baseUrl, request.model, request.prompt);
+        })
+        .then(result => {
+          if (result) sendResponse({ success: true, data: result });
+        })
+        .catch(error => {
+          console.error("所有Ollama请求方式均失败:", error);
           sendResponse({ success: false, error: error.message });
         });
       return true; // 保持消息通道开放
@@ -163,11 +178,29 @@ async function handleAIRequest(request, sendResponse) {
 async function fetchOllamaModels(baseUrl) {
   try {
     console.log(`尝试获取Ollama模型列表: ${baseUrl}/api/tags`);
-    const response = await fetch(`${baseUrl}/api/tags`);
+
+    // 添加CORS相关头信息
+    const requestOptions = {
+      method: 'GET',
+      mode: 'cors',
+      credentials: 'omit',
+      headers: {
+        'Accept': 'application/json',
+        'Origin': chrome.runtime.getURL('')
+      }
+    };
+
+    const response = await fetch(`${baseUrl}/api/tags`, requestOptions);
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Ollama API错误 (${response.status}): ${errorText}`);
+      // 403错误特殊处理
+      if (response.status === 403) {
+        throw new Error(`Ollama服务拒绝访问 (HTTP 403)。请确保使用命令启动Ollama服务:
+OLLAMA_ORIGINS="*" ollama serve`);
+      } else {
+        throw new Error(`Ollama API错误 (${response.status}): ${errorText}`);
+      }
     }
 
     const data = await response.json();
@@ -208,7 +241,8 @@ async function fetchOllamaModels(baseUrl) {
 
     if (error.message.includes('Failed to fetch') ||
         error.message.includes('NetworkError') ||
-        error.message.includes('CORS')) {
+        error.message.includes('CORS') ||
+        error.message.includes('403')) {
       throw new Error(
         `无法连接到Ollama服务 (${baseUrl})。请确保:\n` +
         `1. Ollama服务已启动\n` +
@@ -225,10 +259,17 @@ async function fetchOllamaModels(baseUrl) {
 async function makeOllamaRequest(baseUrl, model, prompt) {
   try {
     console.log(`发送Ollama生成请求: ${baseUrl}/api/generate, 模型: ${model}`);
-    const response = await fetch(`${baseUrl}/api/generate`, {
+
+    // 添加超时控制
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    // 构建请求选项
+    const requestOptions = {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify({
         model: model,
@@ -238,12 +279,35 @@ async function makeOllamaRequest(baseUrl, model, prompt) {
           temperature: 0.3,
           num_predict: 1000
         }
-      })
-    });
+      }),
+      signal: controller.signal
+    };
+
+    // 尝试添加跨域请求头
+    try {
+      requestOptions.mode = 'cors';
+      requestOptions.credentials = 'omit';
+
+      // 添加Origin头，但这可能在某些浏览器中被忽略
+      if (!requestOptions.headers.Origin) {
+        requestOptions.headers.Origin = chrome.runtime.getURL('');
+      }
+    } catch (headerError) {
+      console.warn('添加跨域头信息失败，继续尝试请求:', headerError);
+    }
+
+    const response = await fetch(`${baseUrl}/api/generate`, requestOptions);
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Ollama API错误 (${response.status}): ${errorText}`);
+      // 403错误特殊处理
+      if (response.status === 403) {
+        throw new Error(`Ollama服务拒绝访问 (HTTP 403)。请确保使用正确的命令启动Ollama服务:\nOLLAMA_ORIGINS="*" ollama serve`);
+      } else {
+        throw new Error(`Ollama API错误 (${response.status}): ${errorText}`);
+      }
     }
 
     const data = await response.json();
@@ -267,14 +331,20 @@ async function makeOllamaRequest(baseUrl, model, prompt) {
   } catch (error) {
     console.error("Ollama生成请求错误:", error);
 
+    if (error.name === 'AbortError') {
+      throw new Error('Ollama服务请求超时，请检查服务是否正常运行');
+    }
+
     if (error.message.includes('Failed to fetch') ||
         error.message.includes('NetworkError') ||
-        error.message.includes('CORS')) {
+        error.message.includes('CORS') ||
+        error.message.includes('403')) {
       throw new Error(
         `无法连接到Ollama服务 (${baseUrl})。请确保:\n` +
         `1. Ollama服务已启动\n` +
         `2. 使用命令 OLLAMA_ORIGINS="*" ollama serve 启动服务\n` +
-        `3. 端口11434未被防火墙阻止`
+        `3. 端口11434未被防火墙阻止\n` +
+        `4. 浏览器扩展有权限访问本地服务`
       );
     }
 
@@ -289,14 +359,31 @@ async function checkOllamaConnection(baseUrl) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(`${baseUrl}/api/version`, {
+    // 添加CORS相关头信息
+    const requestOptions = {
       method: 'GET',
-      signal: controller.signal
-    });
+      signal: controller.signal,
+      mode: 'cors',
+      credentials: 'omit',
+      headers: {
+        'Accept': 'application/json',
+        'Origin': chrome.runtime.getURL('')
+      }
+    };
+
+    const response = await fetch(`${baseUrl}/api/version`, requestOptions);
 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
+      // 403错误特殊处理
+      if (response.status === 403) {
+        return {
+          connected: false,
+          message: `Ollama服务拒绝访问 (HTTP 403)。请确保使用命令启动Ollama服务:
+OLLAMA_ORIGINS="*" ollama serve`
+        };
+      }
       return {
         connected: false,
         message: `Ollama服务返回错误: ${response.status} ${response.statusText}`
@@ -316,6 +403,16 @@ async function checkOllamaConnection(baseUrl) {
       };
     } catch (modelError) {
       console.warn("获取模型列表失败，但服务连接正常:", modelError);
+
+      // 检查是否是权限错误
+      if (modelError.message && modelError.message.includes('403')) {
+        return {
+          connected: false,
+          message: `连接到Ollama服务成功，但获取模型列表时被拒绝 (403)。请确保使用命令启动Ollama服务:
+OLLAMA_ORIGINS="*" ollama serve`
+        };
+      }
+
       return {
         connected: true,
         message: `Ollama服务连接正常 (v${data.version || 'unknown'})，但无法获取模型列表`,
@@ -339,6 +436,9 @@ async function checkOllamaConnection(baseUrl) {
 OLLAMA_ORIGINS="*" ollama serve
 
 确保端口11434未被防火墙阻止，且服务正在运行。`;
+    } else if (error.message.includes('403')) {
+      message = `Ollama服务拒绝访问 (HTTP 403)。请确保使用命令启动Ollama服务:
+OLLAMA_ORIGINS="*" ollama serve`;
     }
 
     return {
@@ -354,4 +454,73 @@ async function getConfig() {
       resolve(result.config || defaultConfig);
     });
   });
+}
+
+// 创建offscreen文档以处理网络请求
+async function createOffscreenDocument() {
+  if (await chrome.offscreen.hasDocument?.()) return;
+
+  try {
+    await chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['DOM_SCRAPING'],
+      justification: '用于与本地Ollama服务通信'
+    });
+    console.log('已创建offscreen文档以处理网络请求');
+  } catch (error) {
+    console.error('创建offscreen文档失败:', error);
+    // 如果不支持offscreen API，静默失败
+  }
+}
+
+// 通过offscreen页面发送Ollama请求
+async function makeOllamaRequestViaOffscreen(baseUrl, model, prompt) {
+  // 检查是否支持offscreen API
+  if (!chrome.offscreen || !chrome.offscreen.createDocument) {
+    console.warn('当前浏览器不支持Offscreen API，将直接使用fetch请求');
+    return makeOllamaRequest(baseUrl, model, prompt);
+  }
+
+  try {
+    await createOffscreenDocument();
+
+    // 如果创建成功，尝试使用消息通信
+    try {
+      return await new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(new Error('等待Offscreen响应超时，将尝试直接请求'));
+        }, 5000);
+
+        chrome.runtime.sendMessage({
+          target: 'offscreen',
+          type: 'OLLAMA_REQUEST',
+          data: {
+            baseUrl,
+            model,
+            prompt
+          }
+        }, response => {
+          clearTimeout(timeoutId);
+
+          if (chrome.runtime.lastError) {
+            console.warn('Offscreen通信错误:', chrome.runtime.lastError);
+            // 尝试直接请求
+            reject(new Error(chrome.runtime.lastError.message));
+          } else if (!response || !response.success) {
+            reject(new Error(response?.error || '请求失败，未收到有效响应'));
+          } else {
+            resolve(response.data);
+          }
+        });
+      });
+    } catch (messageError) {
+      console.warn('通过Offscreen通信失败，尝试直接请求:', messageError);
+      // 如果offscreen方式失败，回退到直接请求
+      return makeOllamaRequest(baseUrl, model, prompt);
+    }
+  } catch (error) {
+    console.warn('Offscreen文档创建失败，尝试直接请求:', error);
+    // 如果offscreen方式失败，回退到直接请求
+    return makeOllamaRequest(baseUrl, model, prompt);
+  }
 }

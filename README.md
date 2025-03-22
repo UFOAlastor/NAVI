@@ -67,3 +67,35 @@ npm run build
 ## 许可证
 
 MIT License
+
+## Ollama 服务配置说明
+
+### 跨域访问配置
+
+NAVI 扩展需要访问本地运行的 Ollama 服务，这涉及到浏览器的跨域访问问题。由于浏览器的同源策略（Same-Origin Policy）限制，需要正确配置 Ollama 服务的 CORS（跨域资源共享）策略。
+
+#### 为什么需要设置 OLLAMA_ORIGINS=*？
+
+- 浏览器插件运行在独立的源（如 chrome-extension://）
+- 本地 Ollama 服务默认运行在 http://localhost:11434
+- 浏览器会因同源策略阻止跨域请求
+- 设置 OLLAMA_ORIGINS=* 允许所有来源的请求访问 Ollama 服务
+
+#### 如何正确启动 Ollama 服务？
+
+Windows CMD:
+```cmd
+set OLLAMA_ORIGINS=* && ollama serve
+```
+
+Windows PowerShell:
+```powershell
+$env:OLLAMA_ORIGINS="*"; ollama serve
+```
+
+Linux/macOS:
+```bash
+OLLAMA_ORIGINS="*" ollama serve
+```
+
+> **安全提示**：设置 `OLLAMA_ORIGINS="*"` 将允许任何来源访问您的 Ollama 服务。这在本地开发环境中是安全的，但如果您的计算机连接到公共网络，建议使用更严格的设置。

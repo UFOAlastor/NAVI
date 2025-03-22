@@ -218,8 +218,49 @@ class SelectionHandler {
       return;
     }
 
-    // 获取选中文本的位置
+    // 检查选中文本是否在输入框或插件结果框中
     const range = selection.getRangeAt(0);
+    const container = range.commonAncestorContainer;
+
+    // 获取选中文本所在的元素
+    let element = container;
+    if (container.nodeType === Node.TEXT_NODE) {
+      element = container.parentElement;
+    }
+
+    // 获取源事件目标元素
+    const targetElement = event.target;
+    console.log('NAVI: 事件目标元素:', targetElement);
+
+    // 检查是否在输入框中 - 先检查事件目标元素
+    if (this.isInputElement(targetElement)) {
+      console.log('NAVI: 选中文本在输入框中(事件目标)，不触发划词', targetElement);
+      return;
+    }
+
+    // 检查是否在输入框中 - 检查选中文本所在元素
+    if (this.isInputElement(element)) {
+      console.log('NAVI: 选中文本在输入框中(直接元素)，不触发划词', element);
+      return;
+    }
+
+    // 检查是否在输入框中 - 向上遍历DOM树检查所有祖先元素
+    let currentElement = element;
+    while (currentElement && currentElement !== document.body) {
+      if (this.isInputElement(currentElement)) {
+        console.log('NAVI: 选中文本在输入框中(祖先元素)，不触发划词', currentElement);
+        return;
+      }
+      currentElement = currentElement.parentElement;
+    }
+
+    // 检查是否在插件结果框中
+    if (element.closest('.navi-popup') || element.closest('.navi-result')) {
+      console.log('NAVI: 选中文本在插件结果框中，不触发划词');
+      return;
+    }
+
+    // 获取选中文本的位置
     const rect = range.getBoundingClientRect();
 
     console.log('NAVI: 选中文本的位置:', rect);
@@ -761,6 +802,57 @@ class SelectionHandler {
 
     // 他の言語はまだ足りない場合は英語をデフォルトとして使用
     return textMap[targetLang] || textMap['en'];
+  }
+
+  // 添加辅助方法，用于检测输入元素
+  isInputElement(el) {
+    if (!el || !el.tagName) return false;
+
+    // 获取元素的标签名并转为小写进行比较
+    const tagName = el.tagName.toLowerCase();
+
+    // 检查常见的输入元素标签
+    if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
+      console.log('NAVI: 检测到输入元素:', tagName);
+      return true;
+    }
+
+    // 检查contentEditable属性
+    if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+      console.log('NAVI: 检测到可编辑元素');
+      return true;
+    }
+
+    // 检查role属性
+    if (el.getAttribute('role') === 'textbox' || el.getAttribute('role') === 'searchbox') {
+      console.log('NAVI: 检测到textbox/searchbox角色元素');
+      return true;
+    }
+
+    // 检查特定的类名和属性，用于捕获自定义搜索框
+    const classNames = el.className ? el.className.toLowerCase() : '';
+    if (
+      classNames.includes('search') ||
+      classNames.includes('input') ||
+      el.getAttribute('aria-autocomplete') === 'list' ||
+      el.getAttribute('data-search-input') !== null
+    ) {
+      console.log('NAVI: 检测到搜索框元素');
+      return true;
+    }
+
+    // 检查特殊情况：Google搜索框
+    if (window.location.hostname.includes('google') && (
+      classNames.includes('gsfi') ||
+      classNames.includes('gLFyf') ||
+      el.getAttribute('aria-label') === 'Search' ||
+      el.getAttribute('title') === 'Search'
+    )) {
+      console.log('NAVI: 检测到Google搜索框');
+      return true;
+    }
+
+    return false;
   }
 }
 

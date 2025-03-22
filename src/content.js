@@ -273,25 +273,15 @@ class SelectionHandler {
     const config = this.config || { translationConfig: { targetLanguage: 'zh' } };
     const targetLang = config.translationConfig?.targetLanguage || 'zh';
 
-    // 根据目标语言获取加载提示文本
-    const loadingText = this.getLoadingText(targetLang);
+    // 使用空内容，让::after伪元素显示加载动画
+    this.showPopup(rect, '');
 
-    this.showPopup(rect, `
-      <div class="navi-loading">
-        <div class="navi-draggable-area"></div>
-        <div class="navi-spinner"></div>
-        <div class="navi-status">${loadingText.analyzing}</div>
-      </div>
-    `);
+    // 直接添加loading类
+    this.popup.classList.add('loading');
   }
 
   updateLoadingStatus(rect, status) {
-    const statusElement = this.popup.querySelector('.navi-status');
-    if (statusElement) {
-      statusElement.textContent = status;
-    } else {
-      this.showLoadingPopup(rect);
-    }
+    // 不再更新状态文字
   }
 
   // 获取不同语言的加载提示文本
@@ -453,6 +443,9 @@ class SelectionHandler {
 
     this.showPopup(rect, errorHTML);
 
+    // 错误弹窗也使用与结果弹窗相同的内边距
+    this.popup.classList.add('navi-popup-result');
+
     // 添加事件监听器
     if (errorInfo.action) {
       const actionButton = this.popup.querySelector('.navi-error-action');
@@ -468,8 +461,20 @@ class SelectionHandler {
       return;
     }
 
-    // 清除旧内容
+    // 清除旧内容和类名
     this.popup.innerHTML = content;
+
+    // 设置基本类名
+    this.popup.className = 'navi-popup';
+
+    // 根据内容类型添加适当的类名
+    if (content && content.includes('navi-result')) {
+      this.popup.classList.add('navi-popup-result');
+    }
+    // loading类由showLoadingPopup方法直接添加，不在这里处理
+
+    // 定义与浏览器边缘的最小安全距离
+    const safeDistance = 20; // 与浏览器边缘保持20px的安全距离
 
     // 计算位置
     const windowWidth = window.innerWidth;
@@ -477,18 +482,60 @@ class SelectionHandler {
     const scrollTop = window.scrollY || document.documentElement.scrollTop;
     const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
 
-    // 显示在选区右上方
-    let top = rect.top + scrollTop - this.popup.offsetHeight;
-    let left = rect.right + scrollLeft;
+    // ========= 根据优先级计算位置 =========
+    // 1. 首先尝试放在右上角
+    let top = rect.top + scrollTop - this.popup.offsetHeight - 10;
+    let left = rect.right + scrollLeft + 10;
 
-    // 调整，确保在可视范围内
-    if (top < scrollTop) {
-      top = rect.top + scrollTop; // 如果弹窗会超出顶部，则显示在选区的正上方
+    // 检查右上角位置是否可行
+    let positionFound = true;
+
+    // 检查右侧空间
+    if (left + this.popup.offsetWidth > windowWidth + scrollLeft - safeDistance) {
+      // 右侧空间不足，先尝试调整左侧位置，但仍保持在右半侧
+      const centerX = rect.left + (rect.width / 2) + scrollLeft;
+      left = Math.min(windowWidth + scrollLeft - this.popup.offsetWidth - safeDistance,
+                     Math.max(centerX, windowWidth / 2 + scrollLeft));
+
+      // 如果仍然不可行（没有足够空间），标记为位置未找到
+      if (left + this.popup.offsetWidth > windowWidth + scrollLeft - safeDistance) {
+        positionFound = false;
+      }
     }
 
-    if (left + this.popup.offsetWidth > windowWidth + scrollLeft) {
-      left = rect.left + scrollLeft - this.popup.offsetWidth; // 如果弹窗会超出右侧，则显示在选区的左侧
+    // 检查上方空间
+    if (top < scrollTop + safeDistance) {
+      // 上方空间不足，尝试放在下方但仍偏向右侧
+      top = rect.bottom + scrollTop + 10;
+
+      // 如果下方也不够，标记为位置未找到
+      if (top + this.popup.offsetHeight > windowHeight + scrollTop - safeDistance) {
+        positionFound = false;
+      }
     }
+
+    // 如果上述尝试均失败，最后才考虑左侧
+    if (!positionFound) {
+      // 尝试放在左侧
+      left = rect.left + scrollLeft - this.popup.offsetWidth - 10;
+
+      // 尝试上方
+      top = rect.top + scrollTop - this.popup.offsetHeight - 10;
+
+      // 如果上方不行，尝试下方
+      if (top < scrollTop + safeDistance) {
+        top = rect.bottom + scrollTop + 10;
+      }
+
+      // 如果左侧空间也不足，尽量居中显示
+      if (left < scrollLeft + safeDistance) {
+        left = scrollLeft + (windowWidth - this.popup.offsetWidth) / 2;
+      }
+    }
+
+    // 最终确保不超出视口边界
+    top = Math.max(scrollTop + safeDistance, Math.min(top, windowHeight + scrollTop - this.popup.offsetHeight - safeDistance));
+    left = Math.max(scrollLeft + safeDistance, Math.min(left, windowWidth + scrollLeft - this.popup.offsetWidth - safeDistance));
 
     // 设置位置
     this.popup.style.top = `${top}px`;

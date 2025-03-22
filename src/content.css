@@ -1,47 +1,99 @@
+/* Navi 插件样式 - 变量定义 */
+:root {
+  --navi-border-radius-lg: 8px;
+  --navi-border-radius-md: 6px;
+  --navi-border-radius-sm: 4px;
+  --navi-color-text: #333;
+  --navi-color-text-light: #666;
+  --navi-color-primary: #3498db;
+  --navi-color-primary-light: #4285f4;
+  --navi-color-border: #eee;
+  --navi-color-background: white;
+  --navi-color-background-light: #f5f5f5;
+  --navi-color-background-hover: #e8e8e8;
+  --navi-color-error: #e74c3c;
+  --navi-color-error-bg: #fef1f1;
+  --navi-color-action-bg: #f1f8fe;
+  --navi-color-action-border: #d2e3fc;
+  --navi-color-action-hover: #e8f0fe;
+  --navi-font-size-base: 14px;
+  --navi-font-size-sm: 13px;
+  --navi-font-size-xs: 12px;
+  --navi-font-size-lg: 24px;
+  --navi-spacing-xs: 4px;
+  --navi-spacing-sm: 6px;
+  --navi-spacing-md: 8px;
+  --navi-spacing-lg: 12px;
+  --navi-spacing-xl: 16px;
+}
+
+/* 基础弹窗样式 */
 .navi-popup {
   position: absolute;
   z-index: 999999;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  padding: 12px;
+  background: var(--navi-color-background);
+  border-radius: var(--navi-border-radius-lg);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  /* 默认不设置padding，由具体状态决定 */
   max-width: 400px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 14px;
+  font-family: Consolas, monospace;
+  font-size: var(--navi-font-size-base);
   line-height: 1.5;
-  color: #333;
-  border: 1px solid #eee;
+  color: var(--navi-color-text);
+  border: 1px solid var(--navi-color-border);
   cursor: move;
   user-select: none;
 }
 
+/* 结果状态的弹窗样式 */
+.navi-popup-result {
+  padding: var(--navi-spacing-md);
+}
+
 .navi-draggable-area {
-  height: 10px;
-  margin: -8px -8px 8px -8px;
-  background-color: #f5f5f5;
-  border-radius: 8px 8px 0 0;
+  height: var(--navi-spacing-md);
+  margin: calc(-1 * var(--navi-spacing-md)) calc(-1 * var(--navi-spacing-md)) var(--navi-spacing-md) calc(-1 * var(--navi-spacing-md));
+  background-color: var(--navi-color-background-light);
+  border-radius: var(--navi-border-radius-lg) var(--navi-border-radius-lg) 0 0;
   cursor: grab;
 }
 
 .navi-draggable-area:hover {
-  background-color: #e8e8e8;
+  background-color: var(--navi-color-background-hover);
 }
 
+/* 加载状态 */
 .navi-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 16px;
+  justify-content: center;
+  min-height: 16px;
+  width: 100%;
 }
 
-.navi-spinner {
-  width: 24px;
-  height: 24px;
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #3498db;
+.navi-popup.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  min-height: 16px;
+  padding: var(--navi-spacing-xs); /* 加载状态使用4px的padding */
+  background: var(--navi-color-background);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.navi-popup.loading::after {
+  content: '';
+  display: block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid var(--navi-color-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
+  margin: auto;
 }
 
 @keyframes spin {
@@ -50,101 +102,86 @@
 }
 
 .navi-status {
-  color: #666;
-  font-size: 13px;
+  color: var(--navi-color-text-light);
+  font-size: var(--navi-font-size-sm);
 }
 
+/* 错误状态 */
 .navi-error {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--navi-spacing-lg);
+  padding: var(--navi-spacing-xl);
   text-align: center;
-  background-color: #fef1f1;
-  border-radius: 6px;
+  background-color: var(--navi-color-error-bg);
+  border-radius: var(--navi-border-radius-md);
+  margin: calc(-1 * var(--navi-spacing-md)); /* 抵消父元素的padding */
 }
 
 .navi-error-icon {
-  font-size: 24px;
-  color: #e74c3c;
+  font-size: var(--navi-font-size-lg);
+  color: var(--navi-color-error);
 }
 
 .navi-error-message {
-  color: #e74c3c;
+  color: var(--navi-color-error);
   font-weight: 500;
-  margin-bottom: 4px;
+  margin-bottom: var(--navi-spacing-xs);
 }
 
 .navi-error-hint {
-  color: #666;
-  font-size: 12px;
+  color: var(--navi-color-text-light);
+  font-size: var(--navi-font-size-xs);
   line-height: 1.5;
-  margin-bottom: 8px;
+  margin-bottom: var(--navi-spacing-md);
 }
 
 .navi-error-action {
-  background-color: #f1f8fe;
-  color: #4285f4;
-  font-size: 13px;
-  padding: 6px 12px;
-  border-radius: 4px;
+  background-color: var(--navi-color-action-bg);
+  color: var(--navi-color-primary-light);
+  font-size: var(--navi-font-size-sm);
+  padding: var(--navi-spacing-sm) var(--navi-spacing-lg);
+  border-radius: var(--navi-border-radius-sm);
   cursor: pointer;
   transition: background-color 0.2s;
   font-weight: 500;
-  border: 1px solid #d2e3fc;
+  border: 1px solid var(--navi-color-action-border);
 }
 
 .navi-error-action:hover {
-  background-color: #e8f0fe;
+  background-color: var(--navi-color-action-hover);
 }
 
+/* 结果显示 */
 .navi-result {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  border-radius: 6px;
+  gap: var(--navi-spacing-md);
+  border-radius: var(--navi-border-radius-md);
   overflow: hidden;
 }
 
 .navi-meta {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  font-size: 14px;
-  color: #333;
-  padding-bottom: 8px;
+  gap: var(--navi-spacing-md);
+  font-size: var(--navi-font-size-base);
+  color: var(--navi-color-text);
+  padding-bottom: 0;
 }
 
-.navi-translation, .navi-domain, .navi-explanation {
-  margin-bottom: 8px;
+.navi-translation,
+.navi-domain,
+.navi-explanation {
+  margin-bottom: var(--navi-spacing-md);
   line-height: 1.5;
 }
 
-.navi-translation strong, .navi-domain strong, .navi-explanation strong {
-  color: #666;
-  margin-right: 6px;
+.navi-translation strong,
+.navi-domain strong,
+.navi-explanation strong {
+  color: var(--navi-color-text-light);
+  margin-right: var(--navi-spacing-sm);
   font-weight: 500;
-}
-
-/* 加载动画 */
-.navi-popup.loading {
-  min-width: 100px;
-  text-align: center;
-}
-
-.navi-popup.loading::after {
-  content: '';
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid #f3f3f3;
-  border-top: 2px solid #3498db;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }

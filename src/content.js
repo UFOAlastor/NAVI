@@ -265,22 +265,33 @@ class SelectionHandler {
 
     console.log('NAVI: 选中文本的位置:', rect);
 
+    // 检查配置
+    const config = await this.getConfig();
+    // 将配置保存到实例变量，以便其他方法可以访问
+    this.config = config;
+    console.log('NAVI: 配置加载完成', config);
+
+    // 确保AI服务已初始化
+    if (!this.aiService) {
+      console.log('NAVI: 重新初始化AI服务');
+      this.aiService = AIServiceFactory.createService(config.defaultService, config);
+    }
+
+    // 检查缓存中是否已存在当前文本的处理结果
+    const targetLanguage = config.translationConfig?.targetLanguage || 'zh';
+    const cacheKey = this.aiService.generateCacheKey('translate', selectedText, { targetLang: targetLanguage });
+    const cachedResult = this.aiService.cache.get(cacheKey);
+
+    if (cachedResult) {
+      console.log('NAVI: 从缓存中获取结果:', cachedResult);
+      this.showResultPopup(rect, cachedResult);
+      return;
+    }
+
     // 显示加载状态
     this.showLoadingPopup(rect);
 
     try {
-      // 检查配置
-      const config = await this.getConfig();
-      // 将配置保存到实例变量，以便其他方法可以访问
-      this.config = config;
-      console.log('NAVI: 配置加载完成', config);
-
-      // 确保AI服务已初始化
-      if (!this.aiService) {
-        console.log('NAVI: 重新初始化AI服务');
-        this.aiService = AIServiceFactory.createService(config.defaultService, config);
-      }
-
       // 检查OpenAI配置
       if (config.defaultService === 'openai' && !config.apiKeys?.openai) {
         throw new Error('OpenAI API密钥未配置，请在插件设置中添加密钥');
@@ -291,18 +302,81 @@ class SelectionHandler {
         throw new Error('Ollama配置不完整，请在插件设置中完成配置');
       }
 
-      // 获取目标语言
-      const targetLanguage = config.translationConfig?.targetLanguage || 'zh';
       const loadingText = this.getLoadingText(targetLanguage);
 
       // 更新加载状态
       this.updateLoadingStatus(rect, loadingText.analyzing);
 
-      // 单一API调用，获取翻译、解释和领域信息
-      const result = await this.aiService.translate(selectedText, targetLanguage);
+      // 创建初始结果对象
+      const initialResult = {
+        translated: "",
+        explanation: "",
+        domain: "",
+        sourceLang: 'auto',
+        targetLang: targetLanguage,
+        timestamp: Date.now()
+      };
 
-      // 显示结果
-      this.showResultPopup(rect, result);
+      // 状态标记，是否已显示结果框
+      let resultFrameShown = false;
+
+      // 使用流式API，显示实时结果
+      try {
+        await this.aiService.translateStream(
+          selectedText,
+          targetLanguage,
+          (partialResult) => {
+            try {
+              // 检查是否有实际内容
+              const hasContent = partialResult.translated || partialResult.explanation || partialResult.domain;
+
+              // 只在有内容时才显示结果框，避免空框闪烁
+              if (hasContent && !resultFrameShown) {
+                // 如果正在显示加载动画，先去掉loading类
+                this.popup.classList.remove('loading');
+
+                // 显示结果框，现在里面有内容了
+                this.showResultPopup(rect, partialResult);
+                resultFrameShown = true;
+              } else if (resultFrameShown) {
+                // 持续更新内容
+                this.showResultPopup(rect, partialResult);
+              }
+            } catch (callbackError) {
+              console.error('处理部分结果回调时出错:', callbackError);
+            }
+          },
+          (finalResult) => {
+            try {
+              // 确保结果框已显示
+              if (!resultFrameShown) {
+                this.popup.classList.remove('loading');
+                this.showResultPopup(rect, finalResult || initialResult);
+              } else {
+                this.showResultPopup(rect, finalResult || initialResult);
+              }
+
+              // 所有内容生成完毕，添加闪烁效果
+              this.addCompletionEffect();
+            } catch (completeError) {
+              console.error('处理最终结果回调时出错:', completeError);
+            }
+          }
+        );
+      } catch (streamError) {
+        console.error('流式翻译请求失败:', streamError);
+
+        // 显示错误信息
+        this.showErrorPopup(rect, streamError);
+
+        // 为确保用户体验，也可以显示一个基本结果
+        if (!resultFrameShown) {
+          initialResult.translated = selectedText;
+          initialResult.explanation = "翻译服务暂时不可用";
+          initialResult.domain = "错误";
+          this.showResultPopup(rect, initialResult);
+        }
+      }
     } catch (error) {
       console.error('处理选中文本时出错:', error);
       this.showErrorPopup(rect, error);
@@ -853,6 +927,19 @@ class SelectionHandler {
     }
 
     return false;
+  }
+
+  // 添加完成效果方法
+  addCompletionEffect() {
+    if (!this.popup) return;
+
+    // 添加完成动画类
+    this.popup.classList.add('navi-completion-effect');
+
+    // 动画结束后移除类
+    setTimeout(() => {
+      this.popup.classList.remove('navi-completion-effect');
+    }, 1500); // 动画持续1.5秒
   }
 }
 

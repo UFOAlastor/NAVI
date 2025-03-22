@@ -42,6 +42,7 @@
   color: var(--navi-color-text);
   border: 1px solid var(--navi-color-border);
   user-select: none;
+  transition: border-color 0.3s ease;
 }
 
 /* 结果状态的弹窗样式 */
@@ -197,4 +198,24 @@
   color: var(--navi-color-text-light);
   margin-right: var(--navi-spacing-sm);
   font-weight: 500;
+}
+
+/* 内容生成完成动画效果 */
+.navi-completion-effect {
+  animation: border-pulse 1.5s ease-in-out;
+}
+
+@keyframes border-pulse {
+  0% { border-color: var(--navi-color-border); }
+  20% { border-color: var(--navi-color-primary); box-shadow: 0 0 8px rgba(52, 152, 219, 0.5); }
+  40% { border-color: var(--navi-color-border); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15); }
+  100% { border-color: var(--navi-color-border); }
+}
+
+/* 流式输出文字动画 */
+.navi-translation,
+.navi-explanation,
+.navi-domain {
+  white-space: pre-wrap;
+  word-break: break-word;
 }

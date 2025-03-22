@@ -20,8 +20,56 @@ class AIService {
     throw new Error('Method not implemented');
   }
 
+  async translateStream(text, targetLang, onChunk, onComplete) {
+    try {
+      throw new Error('Method not implemented');
+    } catch (error) {
+      console.error('TranslateStream方法未实现:', error);
+
+      // 确保调用完成回调，以防止UI卡在加载状态
+      if (onComplete) {
+        try {
+          onComplete({
+            translated: text,
+            explanation: "翻译服务错误: " + error.message,
+            domain: "错误",
+            sourceLang: 'auto',
+            targetLang,
+            timestamp: Date.now()
+          });
+        } catch (callbackError) {
+          console.error('调用完成回调时出错:', callbackError);
+        }
+      }
+
+      throw error;
+    }
+  }
+
   async explain(text) {
     throw new Error('Method not implemented');
+  }
+
+  async explainStream(text, onChunk, onComplete) {
+    try {
+      throw new Error('Method not implemented');
+    } catch (error) {
+      console.error('ExplainStream方法未实现:', error);
+
+      // 确保调用完成回调
+      if (onComplete) {
+        try {
+          onComplete({
+            content: "解释服务错误: " + error.message,
+            timestamp: Date.now()
+          });
+        } catch (callbackError) {
+          console.error('调用完成回调时出错:', callbackError);
+        }
+      }
+
+      throw error;
+    }
   }
 
   async detectLanguage(text) {
@@ -193,6 +241,126 @@ class OpenAIService extends AIService {
     });
   }
 
+  async translateStream(text, targetLang, onChunk, onComplete) {
+    try {
+      let result = {
+        translated: "",
+        explanation: "",
+        domain: "",
+        sourceLang: 'auto',
+        targetLang,
+        timestamp: Date.now()
+      };
+
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: "system",
+            content: `你是一个专业的翻译和分析助手。请处理以下文本并返回三个信息：
+1. 将文本翻译成${targetLang}
+2. 提供一句话简短解释其含义（通俗易懂，让外行也能理解）
+3. 确定文本所属的专业领域（如：计算机、医学、法律、经济等）
+
+每个部分使用特殊标记分开：
+===翻译开始===
+[翻译内容]
+===翻译结束===
+===解释开始===
+[解释内容]
+===解释结束===
+===领域开始===
+[领域内容]
+===领域结束===`
+          },
+          {
+            role: "user",
+            content: text
+          }
+        ],
+        temperature: 0.3,
+        stream: true
+      });
+
+      let fullText = "";
+      let foundAnyMarkers = false;
+
+      for await (const chunk of response) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (!content) continue;
+
+        fullText += content;
+
+        // 记录接收到的包含标记的块
+        if (content.includes("===") && (content.includes("开始") || content.includes("结束"))) {
+          console.log("OpenAI标记块:", content);
+        }
+
+        // 检查各个标记是否存在
+        const hasTranslateMarker = fullText.includes("===翻译开始===");
+        const hasExplainMarker = fullText.includes("===解释开始===");
+        const hasDomainMarker = fullText.includes("===领域开始===");
+
+        if (hasTranslateMarker || hasExplainMarker || hasDomainMarker) {
+          foundAnyMarkers = true;
+        }
+
+        // 提取翻译内容
+        if (hasTranslateMarker) {
+          const extracted = extractContent(fullText, "===翻译开始===", "===翻译结束===");
+          if (extracted && extracted.trim()) {
+            result.translated = extracted.trim();
+          }
+        }
+
+        // 提取解释内容
+        if (hasExplainMarker) {
+          const extracted = extractContent(fullText, "===解释开始===", "===解释结束===");
+          if (extracted && extracted.trim()) {
+            result.explanation = extracted.trim();
+          }
+        }
+
+        // 提取领域内容
+        if (hasDomainMarker) {
+          const extracted = extractContent(fullText, "===领域开始===", "===领域结束===");
+          if (extracted && extracted.trim()) {
+            result.domain = extracted.trim();
+          }
+        }
+
+        // 回调当前结果
+        if (onChunk) {
+          onChunk({...result});
+        }
+      }
+
+      // 如果任何部分为空，填充默认值
+      result.translated = result.translated.trim() || text;
+      result.explanation = result.explanation.trim() || "无法获取解释";
+      result.domain = result.domain.trim() || "未知";
+
+      console.log('OpenAI完整响应结果:', {
+        translated: result.translated,
+        explanation: result.explanation,
+        domain: result.domain
+      });
+
+      // 完成回调
+      if (onComplete) {
+        onComplete({...result});
+      }
+
+      // 同时缓存结果
+      const cacheKey = this.generateCacheKey('translate', text, { targetLang });
+      this.cache.set(cacheKey, result);
+
+      return result;
+    } catch (error) {
+      this.handleOpenAIError(error);
+    }
+  }
+
   async explain(text) {
     return this.withCache('explain', text, {}, async () => {
       try {
@@ -230,6 +398,56 @@ class OpenAIService extends AIService {
         this.handleOpenAIError(error);
       }
     });
+  }
+
+  async explainStream(text, onChunk, onComplete) {
+    try {
+      let result = {
+        explanation: "",
+        timestamp: Date.now()
+      };
+
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: "system",
+            content: "你是一个专业的解释助手。请对以下文本进行一句话简短解释，确保通俗易懂，让外行人士也能理解。禁止长篇大论，禁止分点分段，只能用一句话概括。"
+          },
+          {
+            role: "user",
+            content: text
+          }
+        ],
+        temperature: 0.3,
+        stream: true
+      });
+
+      for await (const chunk of response) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (!content) continue;
+
+        result.explanation += content;
+
+        // 回调当前结果
+        if (onChunk) {
+          onChunk({...result});
+        }
+      }
+
+      // 完成回调
+      if (onComplete) {
+        onComplete({...result});
+      }
+
+      // 同时缓存结果
+      const cacheKey = this.generateCacheKey('explain', text, {});
+      this.cache.set(cacheKey, result);
+
+      return result;
+    } catch (error) {
+      this.handleOpenAIError(error);
+    }
   }
 
   async detectLanguage(text) {
@@ -517,12 +735,161 @@ class OllamaService extends AIService {
     });
   }
 
+  async translateStream(text, targetLang, onChunk, onComplete) {
+    return this.withCache('translate', text, { targetLang }, async () => {
+      try {
+        // 简化提示词格式，使用更简单的分隔符
+        const prompt = `你是一个专业的翻译和分析助手。请将下面的文本翻译成${targetLang}，并提供解释和领域分类。
+请严格按照以下格式回复：
+
+翻译：
+[将文本翻译成${targetLang}]
+
+领域：
+[确定文本所属的专业领域（如：计算机、医学、法律、经济等）]
+
+解释：
+[提供一句话简短解释其含义（通俗易懂，让外行也能理解）]
+
+需要处理的文本：${text}`;
+
+        console.log('Ollama请求翻译:', text, '目标语言:', targetLang);
+
+        let fullText = "";
+        let resultObj = {
+          translated: "",
+          explanation: "",
+          domain: "",
+          sourceLang: 'auto',
+          targetLang,
+          timestamp: Date.now()
+        };
+
+        await this.makeStreamRequest(prompt, (chunk, currentText) => {
+          fullText = currentText;
+
+          try {
+            // 使用更简单的分隔方式提取内容
+            const lines = currentText.split('\n').filter(line => line.trim());
+
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i].trim();
+
+              if (line.startsWith('翻译：')) {
+                const nextLine = lines[i + 1];
+                if (nextLine && !nextLine.includes('：')) {
+                  resultObj.translated = nextLine.trim();
+                }
+              }
+
+              if (line.startsWith('解释：')) {
+                const nextLine = lines[i + 1];
+                if (nextLine && !nextLine.includes('：')) {
+                  resultObj.explanation = nextLine.trim();
+                }
+              }
+
+              if (line.startsWith('领域：')) {
+                const nextLine = lines[i + 1];
+                if (nextLine && !nextLine.includes('：')) {
+                  resultObj.domain = nextLine.trim();
+                }
+              }
+            }
+
+            // 如果没有找到标准格式，尝试启发式解析
+            if (!resultObj.translated && !resultObj.explanation && !resultObj.domain) {
+              const nonEmptyLines = lines.filter(line =>
+                line.trim() &&
+                !line.includes('请') &&
+                !line.includes('文本：') &&
+                !line.includes('处理')
+              );
+
+              if (nonEmptyLines.length >= 1 && !resultObj.translated) {
+                resultObj.translated = nonEmptyLines[0];
+              }
+
+              if (nonEmptyLines.length >= 2 && !resultObj.explanation) {
+                for (let i = 1; i < nonEmptyLines.length; i++) {
+                  const line = nonEmptyLines[i];
+                  if (line.includes('是') || line.includes('指') || line.includes('表示')) {
+                    resultObj.explanation = line;
+                    break;
+                  }
+                }
+              }
+
+              if (nonEmptyLines.length >= 3 && !resultObj.domain) {
+                const lastLine = nonEmptyLines[nonEmptyLines.length - 1];
+                if (lastLine.length < 20) {
+                  resultObj.domain = lastLine;
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Ollama解析响应出错:', e);
+          }
+
+          // 分发更新
+          if (onChunk) {
+            onChunk({...resultObj});
+          }
+        }, (finalText) => {
+          console.log('Ollama完整响应:', finalText);
+
+          // 确保所有字段都有值
+          if (!resultObj.translated) resultObj.translated = text;
+          if (!resultObj.explanation) resultObj.explanation = "无法获取解释";
+          if (!resultObj.domain) resultObj.domain = "未知";
+
+          if (onComplete) {
+            onComplete({...resultObj});
+          }
+        });
+
+        return resultObj;
+      } catch (error) {
+        this.handleOllamaError(error);
+      }
+    });
+  }
+
   async explain(text) {
     return this.withCache('explain', text, {}, async () => {
       try {
         const prompt = `请对以下文本进行一句话简短解释，确保通俗易懂，让外行人士也能理解。禁止长篇大论，禁止分点分段，只能用一句话概括：\n${text}`;
         const result = await this.makeRequest(prompt);
         return ResultProcessor.formatExplanation(result);
+      } catch (error) {
+        this.handleOllamaError(error);
+      }
+    });
+  }
+
+  async explainStream(text, onChunk, onComplete) {
+    return this.withCache('explain', text, {}, async () => {
+      try {
+        const prompt = `请对以下文本进行一句话简短解释，确保通俗易懂，让外行人士也能理解。禁止长篇大论，禁止分点分段，只能用一句话概括：\n${text}`;
+
+        let resultObj = {
+          explanation: "",
+          timestamp: Date.now()
+        };
+
+        await this.makeStreamRequest(prompt, (chunk) => {
+          resultObj.explanation += chunk;
+          if (onChunk) {
+            onChunk({...resultObj});
+          }
+        }, (finalText) => {
+          resultObj.explanation = finalText.trim();
+          if (onComplete) {
+            onComplete({...resultObj});
+          }
+        });
+
+        return resultObj;
       } catch (error) {
         this.handleOllamaError(error);
       }
@@ -539,6 +906,191 @@ class OllamaService extends AIService {
         this.handleOllamaError(error);
       }
     });
+  }
+
+  // 流式请求
+  async makeStreamRequest(prompt, onChunk, onComplete) {
+    if (!this.isConnected) {
+      await this.checkConnection();
+    }
+
+    try {
+      console.log('通过background.js发送流式请求到Ollama服务，模型:', this.model);
+
+      return new Promise((resolve, reject) => {
+        let finalResult = "";
+        let messageListener;
+        let timeoutId;
+
+        const cleanup = () => {
+          if (timeoutId) clearTimeout(timeoutId);
+          if (messageListener) {
+            try {
+              chrome.runtime.onMessage.removeListener(messageListener);
+            } catch (e) {
+              console.warn('移除消息监听器失败:', e);
+            }
+          }
+        };
+
+        // 创建消息监听器
+        messageListener = (message, sender, sendResponse) => {
+          try {
+            // 调试日志
+            console.log('收到消息:', message);
+
+            // 检查消息类型
+            if (!message || typeof message !== 'object' || message.type !== "OLLAMA_STREAM_RESPONSE") {
+              return false; // 不是我们要处理的消息
+            }
+
+            // 处理错误
+            if (message.error) {
+              console.error('Ollama流响应错误:', message.error);
+              cleanup();
+              this.isConnected = false;
+              reject(new Error(message.error));
+              return false;
+            }
+
+            // 处理数据块
+            if (message.chunk) {
+              finalResult += message.chunk;
+              if (onChunk) {
+                onChunk(message.chunk, finalResult);
+              }
+            }
+
+            // 处理完成信号
+            if (message.done) {
+              console.log('Ollama流响应完成');
+              cleanup();
+              if (onComplete) {
+                onComplete(finalResult);
+              }
+              resolve(finalResult);
+              return false;
+            }
+
+            return false; // 不需要异步响应
+          } catch (e) {
+            console.error('处理Ollama流响应出错:', e);
+            cleanup();
+            reject(e);
+            return false;
+          }
+        };
+
+        // 先注册监听器
+        chrome.runtime.onMessage.addListener(messageListener);
+
+        // 发送初始请求
+        console.log('发送Ollama流式请求:', {
+          type: "OLLAMA_API_REQUEST",
+          action: "GENERATE_STREAM",
+          model: this.model
+        });
+
+        chrome.runtime.sendMessage({
+          type: "OLLAMA_API_REQUEST",
+          action: "GENERATE_STREAM",
+          baseUrl: this.baseUrl,
+          model: this.model,
+          prompt: prompt
+        }, (initResponse) => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            console.error('发送请求错误:', error);
+            cleanup();
+            this.isConnected = false;
+            reject(new Error('与背景脚本通信失败: ' + error.message));
+            return;
+          }
+
+          console.log('收到初始响应:', initResponse);
+
+          if (!initResponse) {
+            console.warn('初始响应为空，可能背景脚本未返回数据');
+            // 不立即拒绝，等待监听器接收完成消息或超时
+            return;
+          }
+
+          if (initResponse.error) {
+            console.error('初始响应错误:', initResponse.error);
+            cleanup();
+            this.isConnected = false;
+            reject(new Error(initResponse.error));
+            return;
+          }
+
+          // 初始响应成功，等待流式数据
+          console.log('Ollama流式请求已启动，等待数据流...');
+        });
+
+        // 设置超时处理
+        timeoutId = setTimeout(() => {
+          console.error('Ollama请求超时');
+          cleanup();
+          reject(new Error('请求超时，未收到任何响应'));
+        }, 30000); // 30秒超时
+      });
+    } catch (error) {
+      console.error('makeStreamRequest错误:', error);
+      this.isConnected = false;
+      this.handleOllamaError(error);
+    }
+  }
+}
+
+// 辅助函数：从文本中提取标记之间的内容
+function extractContent(text, startMarker, endMarker) {
+  try {
+    // 处理可能的变体形式 (如===翻译 开始===)
+    const startVariations = [
+      startMarker,
+      startMarker.replace("开始", " 开始"),
+      startMarker.replace("===", ""),
+      startMarker.replace("===", "").replace("开始", ""),
+      startMarker.replace("开始", ":")
+    ];
+
+    const endVariations = [
+      endMarker,
+      endMarker.replace("结束", " 结束"),
+      endMarker.replace("===", ""),
+      endMarker.replace("===", "").replace("结束", "")
+    ];
+
+    // 尝试所有可能的变体组合
+    for (const start of startVariations) {
+      if (!text.includes(start)) continue;
+
+      const contentStart = text.indexOf(start) + start.length;
+
+      for (const end of endVariations) {
+        if (!text.includes(end)) continue;
+
+        const endIndex = text.indexOf(end, contentStart);
+        if (endIndex !== -1) {
+          return text.substring(contentStart, endIndex).trim();
+        }
+      }
+
+      // 如果找到起始标记但没有找到结束标记
+      // 返回从起始标记到下一个标记或文本结尾的内容
+      const nextMarkerIndex = text.indexOf("===", contentStart);
+      if (nextMarkerIndex !== -1) {
+        return text.substring(contentStart, nextMarkerIndex).trim();
+      } else {
+        // 没有找到下一个标记，返回所有剩余内容
+        return text.substring(contentStart).trim();
+      }
+    }
+
+    return "";
+  } catch (e) {
+    console.error('提取内容异常:', e);
+    return "";
   }
 }
 
@@ -604,7 +1156,9 @@ class DummyService extends AIService {
   }
 
   async translate() { throw new Error(this.errorMessage); }
+  async translateStream() { throw new Error(this.errorMessage); }
   async explain() { throw new Error(this.errorMessage); }
+  async explainStream() { throw new Error(this.errorMessage); }
   async detectLanguage() { return 'unknown'; }
   async detectDomain() { return 'unknown'; }
 }

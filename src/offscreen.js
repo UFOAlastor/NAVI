@@ -7,13 +7,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
     case 'OLLAMA_REQUEST':
       handleOllamaRequest(message.data)
-        .then(result => sendResponse({ success: true, data: result }))
-        .catch(error => sendResponse({ success: false, error: error.message }));
+        .then(result => {
+          try {
+            sendResponse({ success: true, data: result });
+          } catch (error) {
+            console.warn('发送响应时出错，消息通道可能已关闭:', error);
+          }
+        })
+        .catch(error => {
+          try {
+            sendResponse({ success: false, error: error.message });
+          } catch (sendError) {
+            console.warn('发送错误响应时出错，消息通道可能已关闭:', sendError);
+          }
+        });
       return true; // 保持消息通道开放
 
     default:
       console.warn('未知消息类型:', message.type);
-      sendResponse({ success: false, error: '未知消息类型' });
+      try {
+        sendResponse({ success: false, error: '未知消息类型' });
+      } catch (error) {
+        console.warn('发送错误响应时出错，消息通道可能已关闭:', error);
+      }
       return false;
   }
 });

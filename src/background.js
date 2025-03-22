@@ -35,8 +35,17 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   console.log('接收到消息:', request);
 
+  // 封装sendResponse，添加错误处理
+  const safeSendResponse = (data) => {
+    try {
+      sendResponse(data);
+    } catch (error) {
+      console.warn('发送响应失败，消息通道可能已关闭:', error);
+    }
+  };
+
   if (request.type === "AI_REQUEST") {
-    handleAIRequest(request, sendResponse);
+    handleAIRequest(request, safeSendResponse);
     return true; // 保持消息通道开放以支持异步响应
   } else if (request.type === "OLLAMA_API_REQUEST") {
     console.log("接收到Ollama API请求:", request);
@@ -46,11 +55,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       fetchOllamaModels(request.baseUrl)
         .then(models => {
           console.log("获取到Ollama模型列表:", models);
-          sendResponse({ success: true, data: models });
+          safeSendResponse({ success: true, data: models });
         })
         .catch(error => {
           console.error("获取Ollama模型列表失败:", error);
-          sendResponse({ success: false, error: error.message });
+          safeSendResponse({ success: false, error: error.message });
         });
       return true; // 保持消息通道开放
     }
@@ -60,7 +69,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       // 尝试先使用offscreen API
       makeOllamaRequestViaOffscreen(request.baseUrl, request.model, request.prompt)
         .then(result => {
-          sendResponse({ success: true, data: result });
+          safeSendResponse({ success: true, data: result });
         })
         .catch(error => {
           console.error("Ollama生成请求失败:", error);
@@ -68,11 +77,26 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           return makeOllamaRequest(request.baseUrl, request.model, request.prompt);
         })
         .then(result => {
-          if (result) sendResponse({ success: true, data: result });
+          if (result) safeSendResponse({ success: true, data: result });
         })
         .catch(error => {
           console.error("所有Ollama请求方式均失败:", error);
-          sendResponse({ success: false, error: error.message });
+          safeSendResponse({ success: false, error: error.message });
+        });
+      return true; // 保持消息通道开放
+    }
+
+    // 流式文本生成请求
+    if (request.action === "GENERATE_STREAM") {
+      // 使用新的流式处理方法
+      makeOllamaStreamRequest(request.baseUrl, request.model, request.prompt, sender.tab.id,
+        // 使用sendResponse处理流式响应完成
+        (finalResult) => {
+          safeSendResponse({ success: true, done: true });
+        })
+        .catch(error => {
+          console.error("Ollama流式生成请求失败:", error);
+          safeSendResponse({ success: false, error: error.message });
         });
       return true; // 保持消息通道开放
     }
@@ -84,11 +108,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       checkOllamaConnection(request.baseUrl)
         .then(result => {
           console.log("Ollama连接检查结果:", result);
-          sendResponse({ success: true, data: result });
+          safeSendResponse({ success: true, data: result });
         })
         .catch(error => {
           console.error("Ollama连接检查失败:", error);
-          sendResponse({ success: false, error: error.message });
+          safeSendResponse({ success: false, error: error.message });
         });
       return true; // 保持消息通道开放
     }
@@ -97,11 +121,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.action === "getConfig") {
       getConfig()
         .then(config => {
-          sendResponse({ success: true, data: config });
+          safeSendResponse({ success: true, data: config });
         })
         .catch(error => {
           console.error("获取配置失败:", error);
-          sendResponse({ success: false, error: error.message });
+          safeSendResponse({ success: false, error: error.message });
         });
       return true; // 保持消息通道开放
     }
@@ -522,5 +546,151 @@ async function makeOllamaRequestViaOffscreen(baseUrl, model, prompt) {
     console.warn('Offscreen文档创建失败，尝试直接请求:', error);
     // 如果offscreen方式失败，回退到直接请求
     return makeOllamaRequest(baseUrl, model, prompt);
+  }
+}
+
+// Ollama流式请求函数
+async function makeOllamaStreamRequest(baseUrl, model, prompt, tabId, onComplete) {
+  try {
+    console.log(`开始Ollama流式请求: baseUrl=${baseUrl}, model=${model}, tabId=${tabId}`);
+
+    // 检查标签页是否存在
+    try {
+      await chrome.tabs.get(tabId);
+    } catch (e) {
+      console.error('目标标签页不存在:', e);
+      if (onComplete) onComplete(null);
+      return null;
+    }
+
+    // 创建请求
+    const requestOptions = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/x-ndjson',
+        'Origin': chrome.runtime.getURL('')
+      },
+      body: JSON.stringify({
+        model: model,
+        prompt: prompt,
+        stream: true,
+        options: {
+          temperature: 0.3
+        }
+      })
+    };
+
+    // 发送请求并处理流式响应
+    const response = await fetch(`${baseUrl}/api/generate`, requestOptions);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Ollama API错误 (${response.status}): ${errorText}`);
+    }
+
+    // 获取响应流
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+
+    // 安全发送消息的辅助函数
+    const safeSendMessage = async (message) => {
+      try {
+        // 先检查标签页是否存在
+        await chrome.tabs.get(tabId);
+        await chrome.tabs.sendMessage(tabId, message);
+        return true;
+      } catch (e) {
+        console.warn('无法发送消息，标签页可能已关闭:', e);
+        return false;
+      }
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+
+        // 处理获取到的数据块
+        const lines = chunk.split('\n').filter(line => line.trim());
+        for (const line of lines) {
+          try {
+            const json = JSON.parse(line);
+            const textChunk = json.response || '';
+
+            // 将部分响应发送回内容脚本
+            if (textChunk) {
+              const messageSent = await safeSendMessage({
+                type: "OLLAMA_STREAM_RESPONSE",
+                chunk: textChunk
+              });
+
+              if (!messageSent) {
+                console.log('标签页已关闭，终止流式请求');
+                if (onComplete) onComplete(fullResponse);
+                return fullResponse;
+              }
+
+              fullResponse += textChunk;
+            }
+
+            // 处理完成信号
+            if (json.done) {
+              await safeSendMessage({
+                type: "OLLAMA_STREAM_RESPONSE",
+                done: true
+              });
+
+              if (onComplete) {
+                onComplete(fullResponse);
+              }
+              return fullResponse;
+            }
+          } catch (e) {
+            console.warn('解析Ollama流式响应块失败:', e, line);
+          }
+        }
+      }
+
+      // 如果没有收到完成信号但响应流已结束，也发送完成消息
+      await safeSendMessage({
+        type: "OLLAMA_STREAM_RESPONSE",
+        done: true
+      });
+
+      if (onComplete) {
+        onComplete(fullResponse);
+      }
+      return fullResponse;
+    } catch (streamError) {
+      console.error('处理流式响应时出错:', streamError);
+      // 尝试发送错误消息
+      await safeSendMessage({
+        type: "OLLAMA_STREAM_RESPONSE",
+        error: streamError.message
+      });
+
+      throw streamError;
+    }
+  } catch (error) {
+    console.error('Ollama流式请求失败:', error);
+
+    // 尝试安全发送错误信息
+    try {
+      // 先检查标签页是否存在
+      await chrome.tabs.get(tabId);
+      await chrome.tabs.sendMessage(tabId, {
+        type: "OLLAMA_STREAM_RESPONSE",
+        error: error.message
+      });
+    } catch (e) {
+      console.warn('发送错误消息失败，标签页可能已关闭:', e);
+    }
+
+    if (onComplete) onComplete(null);
+    throw error;
   }
 }

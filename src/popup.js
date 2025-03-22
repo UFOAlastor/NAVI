@@ -1,5 +1,14 @@
+// 导入i18n模块
+import i18n from './utils/i18n.js';
+
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('DOM加载完成，开始初始化...');
+
+  // 初始化国际化模块
+  await i18n.init();
+
+  // 应用当前语言
+  applyLanguage(i18n.getCurrentLanguage());
 
   // 清除可能存在的旧状态消息
   const statusElement = document.getElementById('status');
@@ -19,15 +28,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   const saveButton = document.getElementById('saveButton');
   const status = document.getElementById('status');
   const targetLanguage = document.getElementById('targetLanguage');
+  const uiLanguage = document.getElementById('uiLanguage');
 
   // 检查是否所有必需元素都存在
-  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage) {
+  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !uiLanguage) {
     console.error('某些DOM元素未找到:', {
-      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage
+      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, uiLanguage
     });
-    showStatus('界面加载错误，请刷新重试', 'error');
+    showStatus(i18n.t('interfaceLoadError'), 'error');
     return;
   }
+
+  // 设置界面语言的选择
+  uiLanguage.value = i18n.getCurrentLanguage();
+
+  // 监听界面语言变更
+  uiLanguage.addEventListener('change', async (event) => {
+    const lang = event.target.value;
+    i18n.setLanguage(lang);
+    applyLanguage(lang);
+
+    // 更新配置中的界面语言设置
+    const config = await loadConfig();
+    config.uiLanguage = lang;
+    await saveConfig(config);
+  });
 
   // 加载配置
   const config = await loadConfig();
@@ -51,7 +76,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 检查是否是首次使用
   if (!config.apiKeys?.openai && defaultService.value === 'openai') {
-    showStatus('请配置API密钥以开始使用', 'error');
+    showStatus(i18n.t('pleaseConfigApiKey'), 'error');
     openaiKey.focus();
     openaiKey.style.borderColor = '#c5221f';
     openaiKey.style.animation = 'pulse 1.5s infinite';
@@ -112,20 +137,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
         translationConfig: {
           targetLanguage: targetLanguage.value
-        }
+        },
+        uiLanguage: uiLanguage.value
       };
 
       // 检查关键配置
       if (defaultService.value === 'openai' && !openaiKey.value.trim()) {
-        throw new Error('请输入OpenAI API密钥');
+        throw new Error(i18n.t('inputOpenaiKey'));
       } else if (defaultService.value === 'ollama' && !ollamaUrl.value.trim()) {
-        throw new Error('请输入Ollama服务器地址');
+        throw new Error(i18n.t('inputOllamaAddress'));
       }
 
       console.log('准备保存的新配置:', newConfig);
       await saveConfig(newConfig);
       console.log('配置保存成功');
-      showStatus('设置已保存，即将刷新当前页面...', 'success');
+      showStatus(i18n.t('settingsSaved'), 'success');
 
       // 如果选择了Ollama，检查权限
       if (newConfig.defaultService === 'ollama') {
@@ -143,7 +169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }, 1000);
     } catch (error) {
       console.error('保存配置时出错:', error);
-      showStatus('保存失败: ' + error.message, 'error');
+      showStatus(i18n.t('saveFailed') + error.message, 'error');
     }
   });
 
@@ -154,58 +180,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   fetchOllamaModels();
 });
 
-async function checkOllamaPermission() {
-  try {
-    // 获取当前配置的Ollama URL
-    const config = await loadConfig();
-    const ollamaUrl = config.ollamaConfig?.baseUrl || 'http://localhost:11434';
+// 应用语言到界面
+function applyLanguage(lang) {
+  // 设置文档标题
+  document.title = i18n.t('title');
 
-    showStatus('正在检查Ollama服务连接...', 'info');
+  // 更新所有带data-i18n属性的元素
+  document.querySelectorAll('[data-i18n]').forEach(element => {
+    const key = element.getAttribute('data-i18n');
+    element.textContent = i18n.t(key);
+  });
 
-    // 通过background.js检查Ollama连接
-    chrome.runtime.sendMessage({
-      type: "GET_CONFIG",
-      action: "checkOllamaConnection",
-      baseUrl: ollamaUrl
-    }, response => {
-      if (chrome.runtime.lastError) {
-        console.error('Ollama连接检查失败:', chrome.runtime.lastError);
-        showStatus('Ollama服务连接检查失败: ' + chrome.runtime.lastError.message, 'error');
-        showOllamaCorsHint(true);
-        return;
-      }
-
-      if (!response || !response.success) {
-        console.error('Ollama连接检查失败:', response?.error);
-        showStatus('Ollama服务连接检查失败: ' + (response?.error || '未知错误'), 'error');
-        showOllamaCorsHint(true);
-        return;
-      }
-
-      const connectionResult = response.data;
-
-      if (!connectionResult.connected) {
-        console.error('Ollama服务连接失败:', connectionResult.message);
-        showStatus(connectionResult.message, 'error');
-        showOllamaCorsHint(true);
-        return;
-      }
-
-      showStatus(connectionResult.message, 'success');
-
-      // 如果有模型信息，立即更新模型列表
-      if (connectionResult.models && connectionResult.models.length > 0) {
-        renderOllamaModelOptions(connectionResult.models, config.ollamaConfig?.model || '');
-      } else {
-        // 如果没有模型信息，再次尝试获取
-        fetchOllamaModels();
-      }
-    });
-  } catch (error) {
-    console.error('Ollama服务连接检查失败:', error);
-    showStatus('Ollama服务连接检查失败: ' + error.message, 'error');
-    showOllamaCorsHint(true);
-  }
+  // 更新所有带data-i18n-placeholder属性的元素的placeholder
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
+    const key = element.getAttribute('data-i18n-placeholder');
+    element.placeholder = i18n.t(key);
+  });
 }
 
 async function loadConfig() {
@@ -350,6 +340,59 @@ async function saveConfig(config) {
       reject(new Error(`存储错误: ${err.message}`));
     }
   });
+}
+
+async function checkOllamaPermission() {
+  try {
+    // 获取当前配置的Ollama URL
+    const config = await loadConfig();
+    const ollamaUrl = config.ollamaConfig?.baseUrl || 'http://localhost:11434';
+
+    showStatus(i18n.t('checkingOllamaConnection'), 'info');
+
+    // 通过background.js检查Ollama连接
+    chrome.runtime.sendMessage({
+      type: "GET_CONFIG",
+      action: "checkOllamaConnection",
+      baseUrl: ollamaUrl
+    }, response => {
+      if (chrome.runtime.lastError) {
+        console.error('Ollama连接检查失败:', chrome.runtime.lastError);
+        showStatus(i18n.t('ollamaConnectionFailed') + chrome.runtime.lastError.message, 'error');
+        showOllamaCorsHint(true);
+        return;
+      }
+
+      if (!response || !response.success) {
+        console.error('Ollama连接检查失败:', response?.error);
+        showStatus(i18n.t('ollamaConnectionFailed') + (response?.error || '未知错误'), 'error');
+        showOllamaCorsHint(true);
+        return;
+      }
+
+      const connectionResult = response.data;
+
+      if (!connectionResult.connected) {
+        console.error('Ollama服务连接失败:', connectionResult.message);
+        showStatus(connectionResult.message, 'error');
+        showOllamaCorsHint(true);
+        return;
+      }
+
+      showStatus(connectionResult.message, 'success');
+
+      // 如果有模型信息，立即更新模型列表
+      if (connectionResult.models && connectionResult.models.length > 0) {
+        renderOllamaModelOptions(connectionResult.models, config.ollamaConfig?.model || '');
+      } else {
+        // 如果没有模型信息，再次尝试获取
+        fetchOllamaModels();
+      }
+    });
+  } catch (error) {
+    console.error('检查Ollama权限错误:', error);
+    showStatus(error.message, 'error');
+  }
 }
 
 function showStatus(message, type) {

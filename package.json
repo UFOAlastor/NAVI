@@ -1,7 +1,7 @@
 {
   "name": "navi",
   "version": "1.0.0",
-  "description": "支持多AI平台和本地模型的智能划词翻译与解释工具",
+  "description": "Intelligent text selection assistant supporting multiple AI platforms",
   "main": "src/background.js",
   "scripts": {
     "build": "webpack --mode production",

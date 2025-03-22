@@ -6,7 +6,8 @@ module.exports = {
     background: './src/background.js',
     content: './src/content.js',
     popup: './src/popup.js',
-    offscreen: './src/offscreen.js'
+    offscreen: './src/offscreen.js',
+    'utils/i18n': './src/utils/i18n.js'
   },
   output: {
     path: path.resolve(__dirname, 'dist'),

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "NAVI - 智能划词助手",
+  "name": "NAVI - Smart Text Selection Assistant",
   "version": "1.0.0",
-  "description": "支持多AI平台和本地模型的智能划词翻译与解释工具",
+  "description": "Intelligent text selection translation and explanation tool supporting multiple AI platforms and local models",
   "permissions": [
     "storage",
     "activeTab",
@@ -47,5 +47,11 @@
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["utils/i18n.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

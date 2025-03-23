@@ -31,11 +31,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const secondaryTargetLanguage = document.getElementById('secondaryTargetLanguage');
   const uiLanguage = document.getElementById('uiLanguage');
   const enableTriggerButton = document.getElementById('enableTriggerButton');
+  const selectionDelay = document.getElementById('selectionDelay');
+  const selectionDelayContainer = document.getElementById('selectionDelayContainer');
 
   // 检查是否所有必需元素都存在
-  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !secondaryTargetLanguage || !uiLanguage || !enableTriggerButton) {
+  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !secondaryTargetLanguage || !uiLanguage || !enableTriggerButton || !selectionDelay || !selectionDelayContainer) {
     console.error('某些DOM元素未找到:', {
-      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, secondaryTargetLanguage, uiLanguage, enableTriggerButton
+      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, secondaryTargetLanguage, uiLanguage, enableTriggerButton, selectionDelay, selectionDelayContainer
     });
     showStatus(i18n.t('interfaceLoadError'), 'error');
     return;
@@ -75,8 +77,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   targetLanguage.value = config.translationConfig?.targetLanguage || 'zh';
   secondaryTargetLanguage.value = config.translationConfig?.secondaryTargetLanguage || 'en';
   enableTriggerButton.checked = config.generalConfig?.enableTriggerButton || false;
+  selectionDelay.value = config.generalConfig?.selectionDelay || 500;
+
+  // 初始时根据触发按钮状态显示或隐藏延时设置
+  toggleSelectionDelayVisibility(enableTriggerButton.checked);
 
   console.log('表单填充完成');
+
+  // 添加触发按钮状态变化的监听
+  enableTriggerButton.addEventListener('change', function() {
+    toggleSelectionDelayVisibility(this.checked);
+  });
+
+  // 函数：切换延时设置的可见性
+  function toggleSelectionDelayVisibility(isTriggerButtonEnabled) {
+    if (isTriggerButtonEnabled) {
+      selectionDelayContainer.style.display = 'none';
+    } else {
+      selectionDelayContainer.style.display = 'flex';
+    }
+  }
 
   // 检查是否是首次使用
   if (!config.apiKeys?.openai && defaultService.value === 'openai') {
@@ -198,6 +218,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // 确保通用配置对象存在
       config.generalConfig = config.generalConfig || {};
       config.generalConfig.enableTriggerButton = enableTriggerButton.checked;
+      config.generalConfig.selectionDelay = parseInt(selectionDelay.value, 10) || 500;
 
       // 保存配置
       await saveConfig(config);
@@ -340,80 +361,67 @@ async function loadConfig() {
 }
 
 async function saveConfig(config) {
-  return new Promise((resolve, reject) => {
-    console.log('开始保存配置到storage');
-
-    // 验证配置数据
-    if (!config) {
-      console.error('配置数据为空');
-      reject(new Error('配置数据无效'));
-      return;
-    }
-
-    // 确保必要字段存在
-    if (!config.defaultService) {
-      config.defaultService = 'openai';
-    }
-
-    if (!config.apiKeys) {
-      config.apiKeys = {};
-    }
-
-    if (!config.ollamaConfig) {
-      config.ollamaConfig = {
-        baseUrl: 'http://localhost:11434',
-        model: 'qwen2.5:7b'
-      };
-    }
-
-    // 检查数据大小
-    const configString = JSON.stringify({ config });
-    console.log('配置数据大小(字节):', configString.length);
-
-    // Chrome存储限制提示
-    if (configString.length > 8000) {
-      console.error('配置数据过大，接近Chrome存储限制(8192字节)');
-      reject(new Error('配置数据过大，请减少API密钥长度'));
-      return;
-    }
-
+  return new Promise((resolve) => {
     try {
-      chrome.storage.sync.set({ config }, () => {
-        if (chrome.runtime.lastError) {
-          console.error('保存配置失败:', chrome.runtime.lastError);
-          reject(new Error(`保存失败: ${chrome.runtime.lastError.message}`));
-          return;
+      // 从DOM获取当前配置
+      const defaultService = document.getElementById('defaultService').value;
+      const openaiKey = document.getElementById('openaiKey').value;
+      const openaiBaseUrl = document.getElementById('openaiBaseUrl')?.value || '';
+      const openaiModel = document.getElementById('openaiModel').value;
+      const ollamaUrl = document.getElementById('ollamaUrl').value;
+      const ollamaModel = document.getElementById('ollamaModel').value;
+      const targetLanguage = document.getElementById('targetLanguage').value;
+      const secondaryTargetLanguage = document.getElementById('secondaryTargetLanguage').value;
+      const enableTriggerButton = document.getElementById('enableTriggerButton').checked;
+      const selectionDelay = parseInt(document.getElementById('selectionDelay').value, 10) || 500;
+
+      // 整合配置
+      const updatedConfig = {
+        ...config,
+        defaultService: defaultService,
+        apiKeys: {
+          ...config.apiKeys,
+          openai: openaiKey
+        },
+        apiUrls: {
+          ...config.apiUrls,
+          openai: openaiBaseUrl || 'https://api.openai.com/v1'
+        },
+        openaiConfig: {
+          ...config.openaiConfig,
+          model: openaiModel
+        },
+        ollamaConfig: {
+          ...config.ollamaConfig,
+          baseUrl: ollamaUrl,
+          model: ollamaModel
+        },
+        translationConfig: {
+          ...config.translationConfig,
+          targetLanguage: targetLanguage,
+          secondaryTargetLanguage: secondaryTargetLanguage
+        },
+        generalConfig: {
+          ...config.generalConfig,
+          enableTriggerButton: enableTriggerButton,
+          selectionDelay: selectionDelay
         }
+      };
 
-        console.log('配置保存成功');
-
-        // 验证保存是否成功
-        setTimeout(() => {
-          try {
-            chrome.storage.sync.get(['config'], (result) => {
-              if (chrome.runtime.lastError) {
-                console.error('读取保存后的配置失败:', chrome.runtime.lastError);
-                reject(new Error(`验证失败: ${chrome.runtime.lastError.message}`));
-                return;
-              }
-
-              if (result.config) {
-                console.log('验证配置已保存:', result.config);
-                resolve();
-              } else {
-                console.error('保存后验证失败，无法读取配置');
-                reject(new Error('保存后验证失败，请重试'));
-              }
-            });
-          } catch (verifyErr) {
-            console.error('验证保存时出错:', verifyErr);
-            reject(new Error(`验证错误: ${verifyErr.message}`));
-          }
-        }, 100); // 短暂延迟确保存储操作完成
+      // 保存配置到storage
+      chrome.storage.sync.set({ config: updatedConfig }, () => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          console.error('保存配置时出错:', error);
+          resolve({ success: false, message: error.message });
+        } else {
+          console.log('配置已保存:', updatedConfig);
+          resolve({ success: true });
+        }
       });
-    } catch (err) {
-      console.error('调用chrome.storage.sync.set时出错:', err);
-      reject(new Error(`存储错误: ${err.message}`));
+    } catch (error) {
+      console.error('保存配置时发生异常:', error);
+      resolve({ success: false, message: error.message });
     }
   });
 }

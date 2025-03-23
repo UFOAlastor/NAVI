@@ -115,6 +115,10 @@ class SelectionHandler {
           translationConfig: {
             targetLanguage: 'zh',
             secondaryTargetLanguage: 'en'
+          },
+          generalConfig: {
+            enableTriggerButton: false,
+            selectionDelay: 500 // 默认延时500ms
           }
         };
 
@@ -133,6 +137,14 @@ class SelectionHandler {
         // 确保secondaryTargetLanguage存在
         if (!config.translationConfig.secondaryTargetLanguage) {
           config.translationConfig.secondaryTargetLanguage = defaultConfig.translationConfig.secondaryTargetLanguage;
+        }
+
+        // 确保generalConfig存在
+        config.generalConfig = config.generalConfig || defaultConfig.generalConfig;
+
+        // 确保selectionDelay存在且为数字
+        if (typeof config.generalConfig.selectionDelay !== 'number') {
+          config.generalConfig.selectionDelay = defaultConfig.generalConfig.selectionDelay;
         }
 
         console.log('NAVI: 加载的配置:', config);
@@ -1011,6 +1023,11 @@ class SelectionHandler {
     if (!selectedText) {
       this.hidePopup();
       this.hideTriggerButton();
+      // 如果存在延时计时器，清除它
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
       return;
     }
 
@@ -1075,8 +1092,27 @@ class SelectionHandler {
       return;
     }
 
-    // 如果未启用触发按钮，直接处理选中文本
-    this.processSelectedText(selectedText, rect);
+    // 如果未启用触发按钮，使用延时触发
+    // 首先清除之前可能存在的计时器
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+
+    // 获取延时设置
+    const delay = config.generalConfig?.selectionDelay || 500;
+    console.log(`NAVI: 使用延时触发模式，延时 ${delay}ms`);
+
+    // 保存当前选中的文本和位置，用于延时处理
+    const currentText = selectedText;
+    const currentRect = rect;
+
+    // 设置延时
+    this.debounceTimer = setTimeout(() => {
+      // 延时结束后处理文本
+      this.processSelectedText(currentText, currentRect);
+      this.debounceTimer = null;
+    }, delay);
   }
 
   // 初始化拖动功能

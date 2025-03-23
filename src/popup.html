@@ -171,6 +171,13 @@
         <input type="checkbox" id="enableTriggerButton">
         <span class="option-description" data-i18n="triggerButtonDescription">启用后，划词不会立即触发解释，而是显示触发按钮</span>
       </div>
+
+      <div id="selectionDelayContainer" class="option-row" style="margin-top: 10px; margin-left: 20px;">
+        <label for="selectionDelay" data-i18n="selectionDelay">划词延时</label>
+        <input type="number" id="selectionDelay" min="0" max="5000" style="width: 80px; margin: 0 8px;">
+        <span class="option-description" data-i18n="msUnit">毫秒</span>
+        <span class="option-description" data-i18n="selectionDelayDescription">划词后等待延时才触发处理</span>
+      </div>
     </div>
 
     <div class="section">

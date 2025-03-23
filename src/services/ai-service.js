@@ -16,10 +16,6 @@ class AIService {
     );
   }
 
-  async translate(text, targetLang) {
-    throw new Error('Method not implemented');
-  }
-
   async translateStream(text, targetLang, onChunk, onComplete) {
     try {
       throw new Error('Method not implemented');
@@ -46,10 +42,6 @@ class AIService {
     }
   }
 
-  async explain(text) {
-    throw new Error('Method not implemented');
-  }
-
   async explainStream(text, onChunk, onComplete) {
     try {
       throw new Error('Method not implemented');
@@ -70,14 +62,6 @@ class AIService {
 
       throw error;
     }
-  }
-
-  async detectLanguage(text) {
-    throw new Error('Method not implemented');
-  }
-
-  async detectDomain(text) {
-    throw new Error('Method not implemented');
   }
 
   // 通用错误处理方法
@@ -187,67 +171,6 @@ class OpenAIService extends AIService {
     this.handleError(error);
   }
 
-  async translate(text, targetLang, secondaryTargetLang) {
-    return this.withCache('translate', text, { targetLang, secondaryTargetLang }, async () => {
-      try {
-        // 准备智能提示，根据主选和次选语言动态调整
-        const promptContent = `你是一个专业的翻译和分析助手, 请完成以下三项任务:
-1. 翻译文本, 若文本已经是${targetLang}语言则翻译成${secondaryTargetLang}语言, 否则翻译成${targetLang}语言.
-2. 分析专业领域, 始终使用${targetLang}语言回复.
-3. 提供简短易懂的解释, 始终使用${targetLang}语言回复.
-
-严格按照以下格式回复, 保持标记完全不变:
-
-<TRANSLATION>
-翻译结果
-<DOMAIN>
-领域分类结果
-<EXPLANATION>
-一句话概括结果
-
-以下为需要处理的文本:
-${text}`;
-
-        const response = await this.client.chat.completions.create({
-          model: this.model,
-          messages: [
-            {
-              role: "system",
-              content: promptContent
-            },
-            {
-              role: "user",
-              content: text
-            }
-          ],
-          temperature: 0.3,
-          response_format: { type: "text" }
-        });
-
-        const responseText = response.choices[0].message.content;
-        let result = {
-          translated: "",
-          explanation: "无法获取解释",
-          domain: "未知",
-          sourceLang: 'auto',
-          targetLang,
-          timestamp: Date.now()
-        };
-
-        result = this.parseTranslationResponse(responseText, result);
-
-        // 确保所有字段都有值
-        if (!result.translated) result.translated = text;
-        if (!result.explanation) result.explanation = "无法获取解释";
-        if (!result.domain) result.domain = "未知";
-
-        return result;
-      } catch (error) {
-        this.handleOpenAIError(error);
-      }
-    });
-  }
-
   async translateStream(text, targetLang, onChunk, onComplete, secondaryTargetLang) {
     try {
       let result = {
@@ -340,45 +263,6 @@ ${text}
     }
   }
 
-  async explain(text) {
-    return this.withCache('explain', text, {}, async () => {
-      try {
-        const response = await this.client.chat.completions.create({
-          model: this.model,
-          messages: [
-            {
-              role: "system",
-              content: "你是一个专业的解释助手。请对以下文本进行一句话简短解释，确保通俗易懂，让外行人士也能理解。禁止长篇大论，禁止分点分段，只能用一句话概括。返回格式为JSON: {\"explanation\": \"一句话解释\"}"
-            },
-            {
-              role: "user",
-              content: text
-            }
-          ],
-          temperature: 0.3,
-          response_format: { type: "json_object" }
-        });
-
-        let result;
-        try {
-          result = JSON.parse(response.choices[0].message.content);
-        } catch (e) {
-          // 如果解析失败，使用普通文本处理
-          result = {
-            explanation: response.choices[0].message.content
-          };
-        }
-
-        return {
-          explanation: result.explanation || response.choices[0].message.content,
-          timestamp: Date.now()
-        };
-      } catch (error) {
-        this.handleOpenAIError(error);
-      }
-    });
-  }
-
   async explainStream(text, onChunk, onComplete) {
     try {
       let result = {
@@ -427,60 +311,6 @@ ${text}
     } catch (error) {
       this.handleOpenAIError(error);
     }
-  }
-
-  async detectLanguage(text) {
-    return this.withCache('detectLanguage', text, {}, async () => {
-      try {
-        const response = await this.client.chat.completions.create({
-          model: this.model,
-          messages: [
-            {
-              role: "system",
-              content: "你是一个语言检测助手。请检测以下文本的语言，只返回ISO 639-1语言代码（如：zh、en、ja等）。"
-            },
-            {
-              role: "user",
-              content: text
-            }
-          ],
-          temperature: 0.1
-        });
-        return ResultProcessor.formatLanguageDetection(
-          text,
-          response.choices[0].message.content.trim().toLowerCase()
-        );
-      } catch (error) {
-        this.handleOpenAIError(error);
-      }
-    });
-  }
-
-  async detectDomain(text) {
-    return this.withCache('detectDomain', text, {}, async () => {
-      try {
-        const response = await this.client.chat.completions.create({
-          model: this.model,
-          messages: [
-            {
-              role: "system",
-              content: "你是一个领域检测助手。请检测以下文本属于哪个专业领域（如：计算机、医学、法律等），只返回领域名称。"
-            },
-            {
-              role: "user",
-              content: text
-            }
-          ],
-          temperature: 0.1
-        });
-        return ResultProcessor.formatDomainDetection(
-          text,
-          response.choices[0].message.content.trim()
-        );
-      } catch (error) {
-        this.handleOpenAIError(error);
-      }
-    });
   }
 
   parseTranslationResponse(text, currentResult = {}) {
@@ -772,59 +602,6 @@ class OllamaService extends AIService {
     }
   }
 
-  async translate(text, targetLang, secondaryTargetLang) {
-    return this.withCache('translate', text, { targetLang, secondaryTargetLang }, async () => {
-      try {
-        // 准备智能提示，根据主选和次选语言动态调整
-        const prompt = `你是一个专业的翻译和分析助手. 请完成以下三项任务:
-1. 翻译文本, 若文本已经是${targetLang}语言则翻译成${secondaryTargetLang}语言, 否则翻译成${targetLang}语言.
-2. 分析专业领域, 始终使用${targetLang}语言回复.
-3. 提供简短易懂的解释, 始终使用${targetLang}语言回复.
-
-严格按照以下格式回复, 保持标记完全不变:
-
-<TRANSLATION>
-
-<DOMAIN>
-
-<EXPLANATION>
-
-以下为需要处理的文本:
-${text}`;
-
-        const result = await this.makeRequest(prompt);
-
-        // 尝试解析JSON结果
-        try {
-          // 清理可能的Markdown代码块标记
-          const cleanResult = result.replace(/```json\s*|\s*```/g, '').trim();
-          const parsedResult = JSON.parse(cleanResult);
-          return {
-            translated: parsedResult.translated || result,
-            explanation: parsedResult.explanation || "无法获取解释",
-            domain: parsedResult.domain || "未知",
-            sourceLang: 'auto',
-            targetLang,
-            timestamp: Date.now()
-          };
-        } catch (e) {
-          console.error('解析Ollama响应失败:', e);
-          // 解析失败时返回原始文本作为翻译结果
-          return {
-            translated: result,
-            explanation: "无法获取解释",
-            domain: "未知",
-            sourceLang: 'auto',
-            targetLang,
-            timestamp: Date.now()
-          };
-        }
-      } catch (error) {
-        this.handleOllamaError(error);
-      }
-    });
-  }
-
   async translateStream(text, targetLang, onChunk, onComplete, secondaryTargetLang) {
     return this.withCache('translate', text, { targetLang, secondaryTargetLang }, async () => {
       try {
@@ -1002,18 +779,6 @@ ${text}
     return result;
   }
 
-  async explain(text) {
-    return this.withCache('explain', text, {}, async () => {
-      try {
-        const prompt = `请对以下文本进行一句话简短解释，确保通俗易懂，让外行人士也能理解。禁止长篇大论，禁止分点分段，只能用一句话概括：\n${text}`;
-        const result = await this.makeRequest(prompt);
-        return ResultProcessor.formatExplanation(result);
-      } catch (error) {
-        this.handleOllamaError(error);
-      }
-    });
-  }
-
   async explainStream(text, onChunk, onComplete) {
     return this.withCache('explain', text, {}, async () => {
       try {
@@ -1037,18 +802,6 @@ ${text}
         });
 
         return resultObj;
-      } catch (error) {
-        this.handleOllamaError(error);
-      }
-    });
-  }
-
-  async detectDomain(text) {
-    return this.withCache('detectDomain', text, {}, async () => {
-      try {
-        const prompt = `请检测以下文本属于哪个专业领域（如：计算机、医学、法律等），只返回领域名称：\n${text}`;
-        const result = await this.makeRequest(prompt);
-        return ResultProcessor.formatDomainDetection(text, result.trim());
       } catch (error) {
         this.handleOllamaError(error);
       }
@@ -1302,12 +1055,8 @@ class DummyService extends AIService {
     this.errorMessage = config.errorMessage || '服务未正确配置';
   }
 
-  async translate() { throw new Error(this.errorMessage); }
   async translateStream() { throw new Error(this.errorMessage); }
-  async explain() { throw new Error(this.errorMessage); }
   async explainStream() { throw new Error(this.errorMessage); }
-  async detectLanguage() { return 'unknown'; }
-  async detectDomain() { return 'unknown'; }
 }
 
 export { AIService, AIServiceFactory, OpenAIService, OllamaService, DummyService };

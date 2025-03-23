@@ -513,47 +513,36 @@ function showStatus(message, type) {
     icon = '<span style="color: #137333; font-size: 16px; margin-right: 6px;">✓</span>';
   } else if (type === 'error') {
     icon = '<span style="color: #c5221f; font-size: 16px; margin-right: 6px;">⚠</span>';
+  } else if (type === 'info') {
+    icon = '<span style="color: #4285f4; font-size: 16px; margin-right: 6px;">ℹ</span>';
   }
+
+  // 首先重置所有动画状态
+  statusElement.style.animation = '';
+  statusElement.classList.remove('show', 'hide');
 
   statusElement.innerHTML = icon + message;
   statusElement.className = `status ${type || ''}`;
 
-  // 使状态更明显
+  // 先设置显示，但不要立即添加动画类
   statusElement.style.display = 'block';
-  statusElement.style.opacity = '1';
 
-  // 添加轻微的弹跳动画效果
-  if (!statusElement.style.animation) {
-    statusElement.style.animation = 'bounce 0.3s ease';
-    // 检查是否已添加动画样式
-    if (!document.querySelector('style[data-status-animation]')) {
-      try {
-        const style = document.createElement('style');
-        style.setAttribute('data-status-animation', 'true');
-        style.textContent = `
-          @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-5px); }
-          }
-        `;
-        document.head.appendChild(style);
-      } catch (err) {
-        console.error('添加动画样式失败:', err);
-      }
-    }
-  }
+  // 强制重排，确保元素正确定位
+  void statusElement.offsetWidth;
+
+  // 添加显示动画类
+  statusElement.classList.add('show');
 
   // 成功消息3秒后自动淡出，错误消息需要用户查看
-  if (type === 'success') {
+  if (type === 'success' || type === 'info') {
     setTimeout(() => {
       if (statusElement) {  // 再次检查元素是否存在
-        statusElement.style.opacity = '0';
+        statusElement.classList.remove('show');
+        statusElement.classList.add('hide');
+
         setTimeout(() => {
-          if (statusElement) {  // 确保元素仍然存在
-            statusElement.style.display = 'none';
-            statusElement.style.animation = '';
-          }
-        }, 500);
+          statusElement.style.display = 'none';
+        }, 250); // 与动画时长匹配
       }
     }, 3000);
   }
@@ -783,3 +772,66 @@ function showOllamaCorsHint(isError = false) {
     }
   }
 }
+
+// 修复悬浮框显示问题（从内联脚本移动至此）
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    const statusEl = document.getElementById('status');
+    if (!statusEl) return;
+
+    window.fixedShowStatus = function(message, type) {
+      if (!statusEl) return;
+
+      // 重置所有动画和过渡
+      statusEl.style.animation = '';
+      statusEl.classList.remove('show', 'hide');
+
+      // 设置消息内容和类型
+      let icon = '';
+      if (type === 'success') {
+        icon = '<span style="margin-right: 6px;">✓</span>';
+      } else if (type === 'error') {
+        icon = '<span style="margin-right: 6px;">⚠</span>';
+      } else if (type === 'info') {
+        icon = '<span style="margin-right: 6px;">ℹ</span>';
+      }
+
+      statusEl.innerHTML = icon + message;
+      statusEl.className = 'status ' + (type || '');
+
+      // 确保元素显示并定位正确
+      statusEl.style.display = 'block';
+
+      // 强制重新计算布局，避免闪烁
+      void statusEl.offsetWidth;
+
+      // 应用淡入动画
+      statusEl.classList.add('show');
+
+      // 如果是成功或信息消息，设置自动淡出
+      if (type === 'success' || type === 'info') {
+        setTimeout(() => {
+          statusEl.classList.remove('show');
+          statusEl.classList.add('hide');
+
+          setTimeout(() => {
+            statusEl.style.display = 'none';
+          }, 250); // 动画持续时间
+        }, 3000); // 显示时间
+      }
+    };
+
+    // 尝试替换原始的showStatus函数
+    try {
+      // 保存对原始函数的引用
+      const originalShowStatus = window.showStatus;
+
+      // 用我们的函数覆盖原始函数
+      window.showStatus = function(message, type) {
+        window.fixedShowStatus(message, type);
+      };
+    } catch (e) {
+      console.error('替换showStatus函数失败:', e);
+    }
+  });
+})();

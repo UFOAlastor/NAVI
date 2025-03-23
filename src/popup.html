@@ -5,57 +5,151 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title data-i18n="title">NAVI - 智能划词助手</title>
   <style>
+    :root {
+      --primary-color: #4285f4;
+      --primary-light: #e8f0fe;
+      --primary-hover: #3367d6;
+      --text-primary: #202124;
+      --text-secondary: #5f6368;
+      --border-color: #dadce0;
+      --bg-color: #ffffff;
+      --section-bg: #f8f9fa;
+      --section-gap: 2px;
+      --item-gap: 3px;
+      --border-radius: 8px;
+      --transition-speed: 0.2s;
+      --form-control-width: 100%; /* 统一控件宽度 */
+    }
+
     body {
-      width: 320px;
-      padding: 16px;
+      width: 360px;
+      padding: 8px 10px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      color: var(--text-primary);
+      background-color: var(--bg-color);
+      margin: 0;
+      line-height: 1.2;
+      font-size: 13px;
+      max-height: 80vh; /* 从60%提高到80%视口高度 */
+      overflow-y: auto; /* 仅在必要时显示垂直滚动条 */
+      overflow-x: hidden; /* 防止水平滚动条 */
+      height: auto; /* 添加自动高度，确保内容不多时不会出现滚动条 */
+    }
+
+    html {
+      height: auto; /* 允许HTML元素高度自适应内容 */
+      overflow: visible; /* 确保HTML不会限制内容显示 */
+      min-height: 100%; /* 确保HTML至少有100%的高度 */
+    }
+
+    /* 优化滚动条样式，使其更美观 */
+    body::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    body::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    body::-webkit-scrollbar-thumb {
+      background-color: rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+    }
+
+    body::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(0, 0, 0, 0.2);
     }
 
     .container {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 0px; /* 减小各部分之间的间距 */
+      position: relative;
+      padding-bottom: 5px; /* 添加底部内边距 */
     }
 
     .header {
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: space-between;
+      gap: 4px;
+      margin-bottom: 5px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .header img {
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
     }
 
     .header h1 {
       margin: 0;
-      font-size: 18px;
-      color: #333;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .header select {
+      padding: 2px 4px;
+      font-size: 12px;
+      background-color: var(--section-bg);
+      border-color: transparent;
+      width: auto;
+      border-radius: 4px;
     }
 
     .section {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: var(--item-gap);
+      padding: 8px 10px;
+      background-color: var(--section-bg);
+      border-radius: var(--border-radius);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+      margin-bottom: 2px;
     }
 
     .section-title {
       font-size: 14px;
-      font-weight: 500;
-      color: #666;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 3px;
+      padding-bottom: 3px;
+      border-bottom: 1px solid var(--border-color);
     }
 
     select, input {
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 14px;
+      padding: 4px 6px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      font-size: 13px;
+      color: var(--text-primary);
+      background-color: var(--bg-color);
+      transition: all var(--transition-speed);
+      width: var(--form-control-width);
+      box-sizing: border-box;
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 1px rgba(66, 133, 244, 0.2);
     }
 
     .api-key-input {
       display: flex;
-      gap: 8px;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 2px;
+      width: 100%;
     }
 
     .api-key-input input {
@@ -63,82 +157,255 @@
     }
 
     .save-button {
-      background: #1a73e8;
+      background: var(--primary-color);
       color: white;
       border: none;
-      padding: 8px 16px;
-      border-radius: 4px;
+      padding: 7px;
+      border-radius: var(--border-radius);
       cursor: pointer;
       font-size: 14px;
+      font-weight: 500;
+      transition: background-color var(--transition-speed);
+      margin-top: 6px;
+      margin-bottom: 15px; /* 添加底部边距 */
+      width: 100%;
     }
 
     .save-button:hover {
-      background: #1557b0;
+      background: var(--primary-hover);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     }
 
     .option-row {
       display: flex;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 3px;
+      position: relative;
     }
 
-    .option-row input[type="checkbox"] {
-      margin-right: 8px;
+    .option-row label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      margin-right: 5px;
     }
 
-    .option-description {
-      margin-left: 8px;
-      color: #666;
+    input[type="checkbox"] {
+      -webkit-appearance: none;
+      appearance: none;
+      margin: 0;
+      width: 18px;
+      height: 18px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      margin-right: 4px;
+      display: grid;
+      place-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      min-width: 18px; /* 确保最小宽度 */
+      background-color: var(--bg-color);
+    }
+
+    input[type="checkbox"]::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      transform: scale(0);
+      background-color: var(--primary-color);
+      border-radius: 2px;
+      transition: transform 0.1s;
+    }
+
+    input[type="checkbox"]:checked::before {
+      transform: scale(1);
+    }
+
+    input[type="number"] {
+      width: 30%;
+      text-align: right;
+      border-radius: 6px;
+    }
+
+    .tooltip-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background-color: #f1f3f4;
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: bold;
+      margin-left: 3px;
+      cursor: help;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .tooltip-icon::after {
+      content: "i";
+    }
+
+    .tooltip {
+      position: relative;
+      display: inline-block;
+    }
+
+    .tooltip .tooltip-text {
+      visibility: hidden;
+      width: 200px;
+      background-color: #555;
+      color: #fff;
+      text-align: center;
+      padding: 6px 8px;
+      border-radius: 6px;
+      position: absolute;
+      z-index: 1;
+      bottom: 125%;
+      left: 50%;
+      margin-left: -100px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      font-weight: normal;
       font-size: 12px;
+      line-height: 1.4;
+      text-align: left;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    .tooltip .tooltip-text::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      margin-left: -4px;
+      border-width: 4px;
+      border-style: solid;
+      border-color: #555 transparent transparent transparent;
+    }
+
+    .tooltip:hover .tooltip-text {
+      visibility: visible;
+      opacity: 1;
     }
 
     .status {
-      font-size: 14px;
-      margin-top: 0;
-      margin-bottom: 16px;
+      font-size: 13px;
       padding: 8px 12px;
-      border-radius: 4px;
+      border-radius: var(--border-radius);
       text-align: center;
+      position: fixed;
+      top: 75vh;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      width: 90%;
+      max-width: 90%;
+      box-sizing: border-box;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
       display: none;
       opacity: 0;
-      transition: opacity 0.5s ease;
+      will-change: transform, opacity;
+      pointer-events: none;
+      transition: none;
     }
 
     .status.success {
-      background-color: #e6f4ea;
+      background-color: #f4f9f6;
       color: #137333;
-      border: 1px solid #137333;
+      border: 1px solid #d2e6d9;
     }
 
     .status.error {
-      background-color: #fce8e6;
+      background-color: #fdf3f2;
       color: #c5221f;
-      border: 1px solid #c5221f;
+      border: 1px solid #f5d2cf;
     }
 
     .status.info {
-      background-color: #e8f0fe;
-      color: #1a73e8;
-      border: 1px solid #1a73e8;
+      background-color: #f5f9fe;
+      color: var(--primary-color);
+      border: 1px solid #d3e3fd;
     }
 
-    .language-switcher {
+    @keyframes statusFadeIn {
+      from { opacity: 0; transform: translate(-50%, -15px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
+
+    @keyframes statusFadeOut {
+      from { opacity: 1; transform: translate(-50%, 0); }
+      to { opacity: 0; transform: translate(-50%, -15px); }
+    }
+
+    .status.show {
+      display: block;
+      animation: statusFadeIn 0.25s ease-out forwards;
+    }
+
+    .status.hide {
+      animation: statusFadeOut 0.25s ease-in forwards;
+    }
+
+    #selectionDelayContainer {
       display: flex;
-      justify-content: flex-end;
-      margin-bottom: 10px;
       align-items: center;
-      gap: 8px;
+      padding: 2px 3px;
+      border-radius: 3px;
+      margin-top: 0;
+      margin-left: 0;
     }
 
-    .language-switcher select {
-      padding: 4px 8px;
-      font-size: 12px;
+    .section label {
+      margin-bottom: 0;
+    }
+
+    label + select,
+    label + input {
+      margin-bottom: 3px;
+    }
+
+    .form-group {
+      margin-bottom: 4px;
+      width: 100%;
+    }
+
+    .section label, .section select {
+      display: inline-block;
+    }
+
+    .form-label {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .inline-form-group {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .inline-form-group .form-label {
+      margin-right: 3px;
+    }
+
+    .inline-form-group select,
+    .inline-form-group input {
+      flex: 1;
     }
 
     @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(26, 115, 232, 0.4); }
-      70% { box-shadow: 0 0 0 6px rgba(26, 115, 232, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(26, 115, 232, 0); }
+      0% { box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.4); }
+      70% { box-shadow: 0 0 0 6px rgba(66, 133, 244, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(66, 133, 244, 0); }
     }
 
     @keyframes bounce {
@@ -148,20 +415,17 @@
   </style>
 </head>
 <body>
+  <div class="status" id="status"></div>
   <div class="container">
-    <div class="language-switcher">
-      <span data-i18n="interfaceLanguage">界面语言：</span>
+    <div class="header">
+      <div class="header-left">
+        <img src="../icons/icon48.png" alt="NAVI">
+        <h1 data-i18n="settings">NAVI 设置</h1>
+      </div>
       <select id="uiLanguage">
         <option value="zh" data-i18n="zh_lang">中文 (简体)</option>
         <option value="en" data-i18n="en_lang">英文</option>
       </select>
-    </div>
-
-    <div class="status" id="status"></div>
-
-    <div class="header">
-      <img src="../icons/icon48.png" alt="NAVI">
-      <h1 data-i18n="settings">NAVI 设置</h1>
     </div>
 
     <div class="section">
@@ -169,70 +433,82 @@
       <div class="option-row">
         <label for="enableTriggerButton" data-i18n="enableTriggerButton">触发按钮</label>
         <input type="checkbox" id="enableTriggerButton">
-        <span class="option-description" data-i18n="triggerButtonDescription">启用后，划词不会立即触发解释，而是显示触发按钮</span>
+        <div class="tooltip">
+          <div class="tooltip-icon"></div>
+          <span class="tooltip-text" data-i18n="triggerButtonDescription">启用后，划词不会立即触发解释，而是显示触发按钮</span>
+        </div>
       </div>
 
-      <div id="selectionDelayContainer" class="option-row" style="margin-top: 10px; margin-left: 20px;">
+      <div id="selectionDelayContainer" class="option-row" style="margin-left: 0; padding-left: 0;">
         <label for="selectionDelay" data-i18n="selectionDelay">划词延时</label>
-        <input type="number" id="selectionDelay" min="0" max="5000" style="width: 80px; margin: 0 8px;">
-        <span class="option-description" data-i18n="msUnit">毫秒</span>
-        <span class="option-description" data-i18n="selectionDelayDescription">划词后等待延时才触发处理</span>
+        <input type="number" id="selectionDelay" min="0" max="5000" style="width: 30%;">
+        <span data-i18n="msUnit">毫秒</span>
+        <div class="tooltip">
+          <div class="tooltip-icon"></div>
+          <span class="tooltip-text" data-i18n="selectionDelayDescription">划词后等待延时才触发处理</span>
+        </div>
       </div>
     </div>
 
     <div class="section">
       <div class="section-title" data-i18n="defaultAiService">默认AI服务</div>
-      <label for="defaultService" data-i18n="selectDefaultAiService">选择默认AI服务：</label>
-      <select id="defaultService" aria-label="默认AI服务">
-        <option value="openai">OpenAI</option>
-        <option value="ollama">Ollama</option>
-      </select>
+      <div class="form-group">
+        <label class="form-label" for="defaultService" data-i18n="selectDefaultAiService">选择默认AI服务：</label>
+        <select id="defaultService" aria-label="默认AI服务">
+          <option value="openai">OpenAI</option>
+          <option value="ollama">Ollama</option>
+        </select>
+      </div>
     </div>
 
     <div class="section">
       <div class="section-title" data-i18n="translationSettings">翻译设置</div>
-      <label for="targetLanguage" data-i18n="selectPrimaryTargetLanguage">选择主选目标语言：</label>
-      <select id="targetLanguage" aria-label="主选目标语言">
-        <option value="zh" data-i18n="zh_lang">中文 (简体)</option>
-        <option value="en" data-i18n="en_lang">英文</option>
-        <option value="ja" data-i18n="ja_lang">日文</option>
-        <option value="ko" data-i18n="ko_lang">韩文</option>
-        <option value="fr" data-i18n="fr_lang">法文</option>
-        <option value="de" data-i18n="de_lang">德文</option>
-        <option value="es" data-i18n="es_lang">西班牙文</option>
-        <option value="ru" data-i18n="ru_lang">俄文</option>
-        <option value="it" data-i18n="it_lang">意大利文</option>
-        <option value="pt" data-i18n="pt_lang">葡萄牙文</option>
-        <option value="nl" data-i18n="nl_lang">荷兰文</option>
-        <option value="ar" data-i18n="ar_lang">阿拉伯文</option>
-      </select>
-      <label for="secondaryTargetLanguage" data-i18n="selectSecondaryTargetLanguage">选择次选目标语言：</label>
-      <select id="secondaryTargetLanguage" aria-label="次选目标语言">
-        <option value="en" data-i18n="en_lang">英文</option>
-        <option value="zh" data-i18n="zh_lang">中文 (简体)</option>
-        <option value="ja" data-i18n="ja_lang">日文</option>
-        <option value="ko" data-i18n="ko_lang">韩文</option>
-        <option value="fr" data-i18n="fr_lang">法文</option>
-        <option value="de" data-i18n="de_lang">德文</option>
-        <option value="es" data-i18n="es_lang">西班牙文</option>
-        <option value="ru" data-i18n="ru_lang">俄文</option>
-        <option value="it" data-i18n="it_lang">意大利文</option>
-        <option value="pt" data-i18n="pt_lang">葡萄牙文</option>
-        <option value="nl" data-i18n="nl_lang">荷兰文</option>
-        <option value="ar" data-i18n="ar_lang">阿拉伯文</option>
-      </select>
+      <div class="form-group">
+        <label class="form-label" for="targetLanguage" data-i18n="selectPrimaryTargetLanguage">选择主选目标语言：</label>
+        <select id="targetLanguage" aria-label="主选目标语言">
+          <option value="zh" data-i18n="zh_lang">中文 (简体)</option>
+          <option value="en" data-i18n="en_lang">英文</option>
+          <option value="ja" data-i18n="ja_lang">日文</option>
+          <option value="ko" data-i18n="ko_lang">韩文</option>
+          <option value="fr" data-i18n="fr_lang">法文</option>
+          <option value="de" data-i18n="de_lang">德文</option>
+          <option value="es" data-i18n="es_lang">西班牙文</option>
+          <option value="ru" data-i18n="ru_lang">俄文</option>
+          <option value="it" data-i18n="it_lang">意大利文</option>
+          <option value="pt" data-i18n="pt_lang">葡萄牙文</option>
+          <option value="nl" data-i18n="nl_lang">荷兰文</option>
+          <option value="ar" data-i18n="ar_lang">阿拉伯文</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="secondaryTargetLanguage" data-i18n="selectSecondaryTargetLanguage">选择次选目标语言：</label>
+        <select id="secondaryTargetLanguage" aria-label="次选目标语言">
+          <option value="en" data-i18n="en_lang">英文</option>
+          <option value="zh" data-i18n="zh_lang">中文 (简体)</option>
+          <option value="ja" data-i18n="ja_lang">日文</option>
+          <option value="ko" data-i18n="ko_lang">韩文</option>
+          <option value="fr" data-i18n="fr_lang">法文</option>
+          <option value="de" data-i18n="de_lang">德文</option>
+          <option value="es" data-i18n="es_lang">西班牙文</option>
+          <option value="ru" data-i18n="ru_lang">俄文</option>
+          <option value="it" data-i18n="it_lang">意大利文</option>
+          <option value="pt" data-i18n="pt_lang">葡萄牙文</option>
+          <option value="nl" data-i18n="nl_lang">荷兰文</option>
+          <option value="ar" data-i18n="ar_lang">阿拉伯文</option>
+        </select>
+      </div>
     </div>
 
     <div class="section" id="openaiSection">
       <div class="section-title" data-i18n="apiKey">API密钥</div>
-      <div class="api-key-input">
+      <div class="form-group">
         <input type="password" id="openaiKey" placeholder="OpenAI API密钥" data-i18n-placeholder="openaiApiKey">
       </div>
-      <div class="api-key-input">
+      <div class="form-group">
         <input type="text" id="openaiBaseUrl" placeholder="OpenAI API地址（默认: api.openai.com）" data-i18n-placeholder="openaiApiUrl">
       </div>
-      <div class="api-key-input">
-        <label for="openaiModel" data-i18n="selectOpenaiModel">选择OpenAI模型：</label>
+      <div class="form-group">
+        <label class="form-label" for="openaiModel" data-i18n="selectOpenaiModel">选择OpenAI模型：</label>
         <select id="openaiModel" aria-label="OpenAI模型">
           <option value="gpt-4o">GPT-4o</option>
           <option value="gpt-4o-mini">GPT-4o-mini</option>
@@ -242,10 +518,14 @@
 
     <div class="section" id="ollamaSection">
       <div class="section-title" data-i18n="ollamaSettings">Ollama设置</div>
-      <input type="text" id="ollamaUrl" placeholder="Ollama服务器地址" data-i18n-placeholder="ollamaServerAddress">
-      <select id="ollamaModel" aria-label="Ollama模型">
-        <option value="" data-i18n="selectModel">选择模型...</option>
-      </select>
+      <div class="form-group">
+        <input type="text" id="ollamaUrl" placeholder="Ollama服务器地址" data-i18n-placeholder="ollamaServerAddress">
+      </div>
+      <div class="form-group">
+        <select id="ollamaModel" aria-label="Ollama模型">
+          <option value="" data-i18n="selectModel">选择模型...</option>
+        </select>
+      </div>
     </div>
 
     <button class="save-button" id="saveButton" data-i18n="saveSettings">保存设置</button>

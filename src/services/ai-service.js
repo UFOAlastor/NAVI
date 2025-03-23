@@ -700,7 +700,8 @@ class OllamaService extends AIService {
   "domain": "所属领域"
 }
 
-需要处理的文本: ${text}`;
+以下为需要处理的文本：
+${text}`;
 
         const result = await this.makeRequest(prompt);
 
@@ -738,20 +739,21 @@ class OllamaService extends AIService {
   async translateStream(text, targetLang, onChunk, onComplete) {
     return this.withCache('translate', text, { targetLang }, async () => {
       try {
-        // 简化提示词格式，使用更简单的分隔符
+        // 使用尖括号作为分隔符
         const prompt = `你是一个专业的翻译和分析助手。请将下面的文本翻译成${targetLang}，并提供解释和领域分类。
 请严格按照以下格式回复：
 
-翻译：
+<翻译>
 [将文本翻译成${targetLang}]
 
-领域：
+<领域>
 [确定文本所属的专业领域（如：计算机、医学、法律、经济等）, 以${targetLang}语言输出]
 
-解释：
+<解释>
 [提供一句话简短解释其含义（通俗易懂，让外行也能理解）, 以${targetLang}语言输出]
 
-需要处理的文本：${text}`;
+以下为需要处理的文本：
+${text}`;
 
         console.log('Ollama请求翻译:', text, '目标语言:', targetLang);
 
@@ -769,74 +771,21 @@ class OllamaService extends AIService {
           fullText = currentText;
 
           try {
-            // 使用更简单的分隔方式提取内容
-            const lines = currentText.split('\n').filter(line => line.trim());
+            // 提取翻译、解释和领域内容
+            resultObj = this.parseTranslationResponse(currentText, resultObj);
 
-            for (let i = 0; i < lines.length; i++) {
-              const line = lines[i].trim();
-
-              if (line.startsWith('翻译：')) {
-                const nextLine = lines[i + 1];
-                if (nextLine && !nextLine.includes('：')) {
-                  resultObj.translated = nextLine.trim();
-                }
-              }
-
-              if (line.startsWith('解释：')) {
-                const nextLine = lines[i + 1];
-                if (nextLine && !nextLine.includes('：')) {
-                  resultObj.explanation = nextLine.trim();
-                }
-              }
-
-              if (line.startsWith('领域：')) {
-                const nextLine = lines[i + 1];
-                if (nextLine && !nextLine.includes('：')) {
-                  resultObj.domain = nextLine.trim();
-                }
-              }
-            }
-
-            // 如果没有找到标准格式，尝试启发式解析
-            if (!resultObj.translated && !resultObj.explanation && !resultObj.domain) {
-              const nonEmptyLines = lines.filter(line =>
-                line.trim() &&
-                !line.includes('请') &&
-                !line.includes('文本：') &&
-                !line.includes('处理')
-              );
-
-              if (nonEmptyLines.length >= 1 && !resultObj.translated) {
-                resultObj.translated = nonEmptyLines[0];
-              }
-
-              if (nonEmptyLines.length >= 2 && !resultObj.explanation) {
-                for (let i = 1; i < nonEmptyLines.length; i++) {
-                  const line = nonEmptyLines[i];
-                  if (line.includes('是') || line.includes('指') || line.includes('表示')) {
-                    resultObj.explanation = line;
-                    break;
-                  }
-                }
-              }
-
-              if (nonEmptyLines.length >= 3 && !resultObj.domain) {
-                const lastLine = nonEmptyLines[nonEmptyLines.length - 1];
-                if (lastLine.length < 20) {
-                  resultObj.domain = lastLine;
-                }
-              }
+            // 分发更新
+            if (onChunk) {
+              onChunk({...resultObj});
             }
           } catch (e) {
             console.error('Ollama解析响应出错:', e);
           }
-
-          // 分发更新
-          if (onChunk) {
-            onChunk({...resultObj});
-          }
         }, (finalText) => {
           console.log('Ollama完整响应:', finalText);
+
+          // 最终解析
+          resultObj = this.parseTranslationResponse(finalText, resultObj);
 
           // 确保所有字段都有值
           if (!resultObj.translated) resultObj.translated = text;
@@ -853,6 +802,102 @@ class OllamaService extends AIService {
         this.handleOllamaError(error);
       }
     });
+  }
+
+  parseTranslationResponse(text, currentResult = {}) {
+    const result = { ...currentResult };
+
+    // 创建一个提取标签内容的函数
+    const extractTagContent = (text, startTag, endTag) => {
+      const startIndex = text.indexOf(startTag);
+      if (startIndex === -1) return null;
+
+      const contentStartIndex = startIndex + startTag.length;
+      let endIndex;
+
+      if (endTag) {
+        endIndex = text.indexOf(endTag, contentStartIndex);
+        if (endIndex === -1) endIndex = text.length;
+      } else {
+        endIndex = text.length;
+      }
+
+      return text.substring(contentStartIndex, endIndex).trim();
+    };
+
+    try {
+      // 使用正则表达式提取标签内容
+      const translateRegex = /<翻译>([\s\S]*?)(?=<领域>|<解释>|$)/;
+      const domainRegex = /<领域>([\s\S]*?)(?=<翻译>|<解释>|$)/;
+      const explainRegex = /<解释>([\s\S]*?)(?=<翻译>|<领域>|$)/;
+
+      // 提取翻译内容
+      const translateMatch = text.match(translateRegex);
+      if (translateMatch && translateMatch[1].trim()) {
+        result.translated = translateMatch[1].trim();
+      }
+
+      // 提取领域内容
+      const domainMatch = text.match(domainRegex);
+      if (domainMatch && domainMatch[1].trim()) {
+        result.domain = domainMatch[1].trim();
+      }
+
+      // 提取解释内容
+      const explainMatch = text.match(explainRegex);
+      if (explainMatch && explainMatch[1].trim()) {
+        result.explanation = explainMatch[1].trim();
+      }
+
+      // 如果正则表达式方法失败，尝试备用提取方法
+      if (!result.translated && !result.domain && !result.explanation) {
+        // 备用方法：通过标签定位然后提取至下一个标签
+        const translatedContent = extractTagContent(text, '<翻译>', '<领域>');
+        const domainContent = extractTagContent(text, '<领域>', '<解释>');
+        const explanationContent = extractTagContent(text, '<解释>', null);
+
+        if (translatedContent) result.translated = translatedContent;
+        if (domainContent) result.domain = domainContent;
+        if (explanationContent) result.explanation = explanationContent;
+      }
+
+      // 如果仍然无法提取，尝试启发式方法
+      if (!result.translated && !result.domain && !result.explanation) {
+        const lines = text.split('\n').filter(line => line.trim());
+        const nonEmptyLines = lines.filter(line =>
+          line.trim() &&
+          !line.includes('请') &&
+          !line.includes('文本：') &&
+          !line.includes('处理') &&
+          !line.includes('<')
+        );
+
+        if (nonEmptyLines.length >= 1 && !result.translated) {
+          result.translated = nonEmptyLines[0];
+        }
+
+        if (nonEmptyLines.length >= 2 && !result.explanation) {
+          for (let i = 1; i < nonEmptyLines.length; i++) {
+            const line = nonEmptyLines[i];
+            if (line.includes('是') || line.includes('指') || line.includes('表示')) {
+              result.explanation = line;
+              break;
+            }
+          }
+        }
+
+        if (nonEmptyLines.length >= 3 && !result.domain) {
+          const lastLine = nonEmptyLines[nonEmptyLines.length - 1];
+          if (lastLine.length < 20) {
+            result.domain = lastLine;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('解析翻译响应时出错:', e);
+    }
+
+    return result;
   }
 
   async explain(text) {

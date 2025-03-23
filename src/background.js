@@ -138,45 +138,44 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
 async function handleAIRequest(request, sendResponse) {
   try {
+    console.log('收到AI请求:', request);
+
+    // 获取当前配置
     const config = await getConfig();
-
-    // 如果使用Ollama，先尝试检查连接
-    if (config.defaultService === 'ollama') {
-      try {
-        const baseUrl = config.ollamaConfig?.baseUrl || 'http://localhost:11434';
-        console.log(`检查Ollama服务连接: ${baseUrl}`);
-
-        const checkResult = await checkOllamaConnection(baseUrl);
-        if (!checkResult.connected) {
-          console.error('Ollama服务连接检查失败:', checkResult.message);
-          throw new Error(`Ollama服务连接失败: ${checkResult.message}`);
-        } else {
-          console.log('Ollama服务连接检查成功:', checkResult.message);
-        }
-      } catch (error) {
-        console.error('Ollama服务检查失败:', error);
-
-        // 提供详细的错误信息和解决方案
-        const errorMessage = error.message && error.message.includes('CORS')
-          ? error.message
-          : `Ollama服务连接失败。请按照以下步骤操作:
-
-1. 确保Ollama服务已启动
-2. 使用以下命令启动Ollama服务以允许浏览器扩展访问:
-   OLLAMA_ORIGINS="*" ollama serve
-3. 确保防火墙未阻止端口11434
-4. 如果问题仍然存在，尝试切换到OpenAI服务`;
-
-        throw new Error(errorMessage);
-      }
+    if (!config) {
+      throw new Error('配置无法加载');
     }
 
-    const service = AIServiceFactory.createService(config.defaultService, config);
+    // 创建AI服务实例
+    const service = AIServiceFactory.createService(request.service || config.defaultService, config);
+
+    // 调用服务API前检查参数
+    if (!request.text) {
+      throw new Error('请求中缺少必要的文本参数');
+    }
+
+    if (request.action === 'translate' && !request.targetLang) {
+      // 使用配置中的默认目标语言
+      request.targetLang = config.translationConfig?.targetLanguage || 'zh';
+    }
+
+    // 如果请求中没有次选目标语言，使用配置中的默认次选目标语言
+    if (request.action === 'translate' && !request.secondaryTargetLang) {
+      request.secondaryTargetLang = config.translationConfig?.secondaryTargetLanguage || 'en';
+    }
+
+    console.log('调用AI服务:', {
+      service: request.service || config.defaultService,
+      action: request.action,
+      text: request.text.substring(0, 50) + (request.text.length > 50 ? '...' : ''),
+      targetLang: request.targetLang,
+      secondaryTargetLang: request.secondaryTargetLang
+    });
 
     let result;
     switch (request.action) {
       case 'translate':
-        result = await service.translate(request.text, request.targetLang);
+        result = await service.translate(request.text, request.targetLang, request.secondaryTargetLang);
         break;
       case 'explain':
         result = await service.explain(request.text);

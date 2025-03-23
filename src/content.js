@@ -48,7 +48,8 @@ class SelectionHandler {
             model: 'qwen2.5:7b'
           },
           translationConfig: {
-            targetLanguage: 'zh'
+            targetLanguage: 'zh',
+            secondaryTargetLanguage: 'en'
           }
         };
 
@@ -63,6 +64,11 @@ class SelectionHandler {
 
         // 确保translationConfig存在
         config.translationConfig = config.translationConfig || defaultConfig.translationConfig;
+
+        // 确保secondaryTargetLanguage存在
+        if (!config.translationConfig.secondaryTargetLanguage) {
+          config.translationConfig.secondaryTargetLanguage = defaultConfig.translationConfig.secondaryTargetLanguage;
+        }
 
         console.log('NAVI: 加载的配置:', config);
         resolve(config);
@@ -277,9 +283,12 @@ class SelectionHandler {
       this.aiService = AIServiceFactory.createService(config.defaultService, config);
     }
 
-    // 检查缓存中是否已存在当前文本的处理结果
+    // 获取目标语言配置
     const targetLanguage = config.translationConfig?.targetLanguage || 'zh';
-    const cacheKey = this.aiService.generateCacheKey('translate', selectedText, { targetLang: targetLanguage });
+    const secondaryTargetLanguage = config.translationConfig?.secondaryTargetLanguage || 'en';
+
+    // 检查缓存中是否已存在当前文本的处理结果
+    const cacheKey = this.aiService.generateCacheKey('translate', selectedText, { targetLang: targetLanguage, secondaryTargetLang: secondaryTargetLanguage });
     const cachedResult = this.aiService.cache.get(cacheKey);
 
     if (cachedResult) {
@@ -292,32 +301,19 @@ class SelectionHandler {
     this.showLoadingPopup(rect);
 
     try {
-      // 检查OpenAI配置
-      if (config.defaultService === 'openai' && !config.apiKeys?.openai) {
-        throw new Error('OpenAI API密钥未配置，请在插件设置中添加密钥');
-      }
+      console.log('NAVI: 发送AI请求', selectedText);
 
-      // 检查Ollama配置
-      if (config.defaultService === 'ollama' && (!config.ollamaConfig?.baseUrl || !config.ollamaConfig?.model)) {
-        throw new Error('Ollama配置不完整，请在插件设置中完成配置');
-      }
-
-      const loadingText = this.getLoadingText(targetLanguage);
-
-      // 更新加载状态
-      this.updateLoadingStatus(rect, loadingText.analyzing);
-
-      // 创建初始结果对象
+      // 预备一个初始结果对象，用于提供默认值并初始化结果框
       const initialResult = {
-        translated: "",
-        explanation: "",
-        domain: "",
+        translated: "...",
+        explanation: "...",
+        domain: "...",
         sourceLang: 'auto',
         targetLang: targetLanguage,
         timestamp: Date.now()
       };
 
-      // 状态标记，是否已显示结果框
+      // 设置一个标志，避免重复创建结果框
       let resultFrameShown = false;
 
       // 使用流式API，显示实时结果
@@ -361,7 +357,8 @@ class SelectionHandler {
             } catch (completeError) {
               console.error('处理最终结果回调时出错:', completeError);
             }
-          }
+          },
+          secondaryTargetLanguage // 传递次选目标语言
         );
       } catch (streamError) {
         console.error('流式翻译请求失败:', streamError);

@@ -78,7 +78,8 @@
 
     .status {
       font-size: 14px;
-      margin-top: 12px;
+      margin-top: 0;
+      margin-bottom: 16px;
       padding: 8px 12px;
       border-radius: 4px;
       text-align: center;
@@ -140,6 +141,8 @@
       </select>
     </div>
 
+    <div class="status" id="status"></div>
+
     <div class="header">
       <img src="../icons/icon48.png" alt="NAVI">
       <h1 data-i18n="settings">NAVI 设置</h1>
@@ -156,10 +159,25 @@
 
     <div class="section">
       <div class="section-title" data-i18n="translationSettings">翻译设置</div>
-      <label for="targetLanguage" data-i18n="selectTargetLanguage">选择目标语言：</label>
-      <select id="targetLanguage" aria-label="目标语言">
+      <label for="targetLanguage" data-i18n="selectPrimaryTargetLanguage">选择主选目标语言：</label>
+      <select id="targetLanguage" aria-label="主选目标语言">
         <option value="zh" data-i18n="zh_lang">中文 (简体)</option>
         <option value="en" data-i18n="en_lang">英文</option>
+        <option value="ja" data-i18n="ja_lang">日文</option>
+        <option value="ko" data-i18n="ko_lang">韩文</option>
+        <option value="fr" data-i18n="fr_lang">法文</option>
+        <option value="de" data-i18n="de_lang">德文</option>
+        <option value="es" data-i18n="es_lang">西班牙文</option>
+        <option value="ru" data-i18n="ru_lang">俄文</option>
+        <option value="it" data-i18n="it_lang">意大利文</option>
+        <option value="pt" data-i18n="pt_lang">葡萄牙文</option>
+        <option value="nl" data-i18n="nl_lang">荷兰文</option>
+        <option value="ar" data-i18n="ar_lang">阿拉伯文</option>
+      </select>
+      <label for="secondaryTargetLanguage" data-i18n="selectSecondaryTargetLanguage">选择次选目标语言：</label>
+      <select id="secondaryTargetLanguage" aria-label="次选目标语言">
+        <option value="en" data-i18n="en_lang">英文</option>
+        <option value="zh" data-i18n="zh_lang">中文 (简体)</option>
         <option value="ja" data-i18n="ja_lang">日文</option>
         <option value="ko" data-i18n="ko_lang">韩文</option>
         <option value="fr" data-i18n="fr_lang">法文</option>
@@ -199,7 +217,6 @@
     </div>
 
     <button class="save-button" id="saveButton" data-i18n="saveSettings">保存设置</button>
-    <div class="status" id="status"></div>
   </div>
   <script src="popup.js"></script>
 </body>

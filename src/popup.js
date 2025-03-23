@@ -28,12 +28,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const saveButton = document.getElementById('saveButton');
   const status = document.getElementById('status');
   const targetLanguage = document.getElementById('targetLanguage');
+  const secondaryTargetLanguage = document.getElementById('secondaryTargetLanguage');
   const uiLanguage = document.getElementById('uiLanguage');
 
   // 检查是否所有必需元素都存在
-  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !uiLanguage) {
+  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !secondaryTargetLanguage || !uiLanguage) {
     console.error('某些DOM元素未找到:', {
-      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, uiLanguage
+      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, secondaryTargetLanguage, uiLanguage
     });
     showStatus(i18n.t('interfaceLoadError'), 'error');
     return;
@@ -71,6 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   ollamaUrl.value = config.ollamaConfig?.baseUrl || 'http://localhost:11434';
   ollamaModel.value = config.ollamaConfig?.model || 'qwen2.5:7b';
   targetLanguage.value = config.translationConfig?.targetLanguage || 'zh';
+  secondaryTargetLanguage.value = config.translationConfig?.secondaryTargetLanguage || 'en';
 
   console.log('表单填充完成');
 
@@ -116,60 +118,121 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // 保存按钮点击事件
-  saveButton.addEventListener('click', async () => {
-    console.log('保存按钮被点击');
-    try {
-      const newConfig = {
-        defaultService: defaultService.value,
-        apiKeys: {
-          openai: openaiKey.value
-        },
-        apiUrls: {
-          openai: openaiBaseUrl ? openaiBaseUrl.value : 'https://api.openai.com/v1'
-        },
-        openaiConfig: {
-          model: openaiModel.value
-        },
-        ollamaConfig: {
-          baseUrl: ollamaUrl.value,
-          model: ollamaModel.value
-        },
-        translationConfig: {
-          targetLanguage: targetLanguage.value
-        },
-        uiLanguage: uiLanguage.value
-      };
+  // 检查配置的有效性
+  function validateConfig() {
+    let isValid = true;
+    let errorMessage = '';
 
-      // 检查关键配置
-      if (defaultService.value === 'openai' && !openaiKey.value.trim()) {
-        throw new Error(i18n.t('inputOpenaiKey'));
-      } else if (defaultService.value === 'ollama' && !ollamaUrl.value.trim()) {
-        throw new Error(i18n.t('inputOllamaAddress'));
+    // 添加二次验证：主选和次选语言不应相同
+    if (targetLanguage.value === secondaryTargetLanguage.value) {
+      isValid = false;
+      errorMessage = '主选和次选语言不能相同';
+    }
+
+    // 根据默认服务的不同，验证不同的API参数
+    if (defaultService.value === 'openai') {
+      // 验证OpenAI API Key是否存在
+      if (!openaiKey.value.trim()) {
+        isValid = false;
+        errorMessage = i18n.t('inputOpenaiKey');
+      }
+    } else if (defaultService.value === 'ollama') {
+      // 验证Ollama服务地址是否存在
+      if (!ollamaUrl.value.trim()) {
+        isValid = false;
+        errorMessage = i18n.t('inputOllamaAddress');
+      }
+    }
+
+    return { isValid, errorMessage };
+  }
+
+  // 保存设置按钮的点击事件
+  saveButton.addEventListener('click', async () => {
+    // 验证配置
+    const { isValid, errorMessage } = validateConfig();
+    if (!isValid) {
+      showStatus(errorMessage, 'error');
+      return;
+    }
+
+    // 禁用保存按钮防止重复点击
+    saveButton.disabled = true;
+
+    // 显示保存中状态
+    showStatus('正在保存...', 'info');
+
+    try {
+      // 获取当前配置
+      const config = await loadConfig();
+
+      // 更新配置
+      config.defaultService = defaultService.value;
+
+      // 确保API Keys对象存在
+      config.apiKeys = config.apiKeys || {};
+      config.apiKeys.openai = openaiKey.value;
+
+      // 确保API URLs对象存在
+      config.apiUrls = config.apiUrls || {};
+      if (openaiBaseUrl) {
+        config.apiUrls.openai = openaiBaseUrl.value || 'https://api.openai.com/v1';
       }
 
-      console.log('准备保存的新配置:', newConfig);
-      await saveConfig(newConfig);
-      console.log('配置保存成功');
+      // 确保OpenAI配置对象存在
+      config.openaiConfig = config.openaiConfig || {};
+      config.openaiConfig.model = openaiModel.value;
+
+      // 确保Ollama配置对象存在
+      config.ollamaConfig = config.ollamaConfig || {};
+      config.ollamaConfig.baseUrl = ollamaUrl.value;
+      config.ollamaConfig.model = ollamaModel.value;
+
+      // 确保翻译配置对象存在
+      config.translationConfig = config.translationConfig || {};
+      config.translationConfig.targetLanguage = targetLanguage.value;
+      config.translationConfig.secondaryTargetLanguage = secondaryTargetLanguage.value;
+
+      // 保存配置
+      await saveConfig(config);
+
+      // 显示成功状态
       showStatus(i18n.t('settingsSaved'), 'success');
 
-      // 如果选择了Ollama，检查权限
-      if (newConfig.defaultService === 'ollama') {
-        await checkOllamaPermission();
-      }
-
-      // 刷新当前活动标签页，而不是插件页面
-      setTimeout(() => {
+      // 安全地向内容脚本发送配置更新通知
+      try {
+        // 只向当前活动标签页发送消息
         chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
           if (tabs && tabs[0] && tabs[0].id) {
-            chrome.tabs.reload(tabs[0].id);
+            try {
+              chrome.tabs.sendMessage(tabs[0].id, { type: 'CONFIG_UPDATED' }, function(response) {
+                // 检查是否有错误发生（消息通道错误）
+                if (chrome.runtime.lastError) {
+                  console.log('无法发送消息到当前标签页:', chrome.runtime.lastError);
+                  // 继续刷新标签页，即使消息发送失败
+                }
+              });
+            } catch (e) {
+              console.log('发送消息时出错:', e);
+            }
+
+            // 延时后刷新当前活动标签页
+            setTimeout(() => {
+              chrome.tabs.reload(tabs[0].id);
+              window.close(); // 关闭弹窗
+            }, 1000);
           }
         });
-        window.close(); // 关闭插件弹窗
-      }, 1000);
+      } catch (error) {
+        console.error('通知标签页或刷新页面时出错:', error);
+        // 即使出错也尝试关闭弹窗
+        setTimeout(() => window.close(), 1500);
+      }
     } catch (error) {
-      console.error('保存配置时出错:', error);
+      // 显示错误状态
       showStatus(i18n.t('saveFailed') + error.message, 'error');
+      // 重新启用保存按钮
+      saveButton.disabled = false;
     }
   });
 
@@ -406,7 +469,13 @@ function showStatus(message, type) {
       const tempStatus = document.createElement('div');
       tempStatus.id = 'status';
       tempStatus.className = `status ${type || 'error'}`;
-      document.body.appendChild(tempStatus);
+      const container = document.querySelector('.container');
+      const languageSwitcher = document.querySelector('.language-switcher');
+      if (container && languageSwitcher) {
+        container.insertBefore(tempStatus, languageSwitcher.nextSibling);
+      } else {
+        document.body.appendChild(tempStatus);
+      }
 
       // 递归调用自身使用新创建的元素
       showStatus(message, type);

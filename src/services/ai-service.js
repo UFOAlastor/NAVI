@@ -187,24 +187,33 @@ class OpenAIService extends AIService {
     this.handleError(error);
   }
 
-  async translate(text, targetLang) {
-    return this.withCache('translate', text, { targetLang }, async () => {
+  async translate(text, targetLang, secondaryTargetLang) {
+    return this.withCache('translate', text, { targetLang, secondaryTargetLang }, async () => {
       try {
+        // 准备智能提示，根据主选和次选语言动态调整
+        const promptContent = `你是一个专业的翻译和分析助手, 请完成以下三项任务:
+1. 翻译文本, 若文本已经是${targetLang}语言则翻译成${secondaryTargetLang}语言, 否则翻译成${targetLang}语言.
+2. 分析专业领域, 始终使用${targetLang}语言回复.
+3. 提供简短易懂的解释, 始终使用${targetLang}语言回复.
+
+严格按照以下格式回复, 保持标记完全不变:
+
+<TRANSLATION>
+翻译结果
+<DOMAIN>
+领域分类结果
+<EXPLANATION>
+一句话概括结果
+
+以下为需要处理的文本:
+${text}`;
+
         const response = await this.client.chat.completions.create({
           model: this.model,
           messages: [
             {
               role: "system",
-              content: `你是一个专业的翻译和分析助手。请处理以下文本并返回三个信息：
-1. 将文本翻译成${targetLang}
-2. 提供一句话简短解释其含义（通俗易懂，让外行也能理解）
-3. 确定文本所属的专业领域（如：计算机、医学、法律、经济等）
-
-返回格式为JSON: {
-  "translated": "翻译结果",
-  "explanation": "一句话解释",
-  "domain": "所属领域"
-}`
+              content: promptContent
             },
             {
               role: "user",
@@ -212,36 +221,34 @@ class OpenAIService extends AIService {
             }
           ],
           temperature: 0.3,
-          response_format: { type: "json_object" }
+          response_format: { type: "text" }
         });
 
-        let result;
-        try {
-          result = JSON.parse(response.choices[0].message.content);
-        } catch (e) {
-          // 如果解析失败，使用普通文本处理
-          result = {
-            translated: response.choices[0].message.content,
-            explanation: "无法获取解释",
-            domain: "未知"
-          };
-        }
-
-        return {
-          translated: result.translated || response.choices[0].message.content,
-          explanation: result.explanation || "无法获取解释",
-          domain: result.domain || "未知",
+        const responseText = response.choices[0].message.content;
+        let result = {
+          translated: "",
+          explanation: "无法获取解释",
+          domain: "未知",
           sourceLang: 'auto',
           targetLang,
           timestamp: Date.now()
         };
+
+        result = this.parseTranslationResponse(responseText, result);
+
+        // 确保所有字段都有值
+        if (!result.translated) result.translated = text;
+        if (!result.explanation) result.explanation = "无法获取解释";
+        if (!result.domain) result.domain = "未知";
+
+        return result;
       } catch (error) {
         this.handleOpenAIError(error);
       }
     });
   }
 
-  async translateStream(text, targetLang, onChunk, onComplete) {
+  async translateStream(text, targetLang, onChunk, onComplete, secondaryTargetLang) {
     try {
       let result = {
         translated: "",
@@ -252,26 +259,31 @@ class OpenAIService extends AIService {
         timestamp: Date.now()
       };
 
+      // 准备智能提示，根据主选和次选语言动态调整
+      const prompt = `你是一个专业的翻译和分析助手, 请完成以下三项任务:
+1. 翻译文本, 若文本已经是${targetLang}语言则翻译成${secondaryTargetLang}语言, 否则翻译成${targetLang}语言.
+2. 分析专业领域, 始终使用${targetLang}语言回复.
+3. 提供简短易懂的解释, 始终使用${targetLang}语言回复.
+
+严格按照以下格式回复, 保持标记完全不变:
+
+<TRANSLATION>
+翻译结果
+<DOMAIN>
+领域分类结果
+<EXPLANATION>
+一句话概括结果
+
+以下为需要处理的文本:
+${text}
+`;
+
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
           {
             role: "system",
-            content: `你是一个专业的翻译和分析助手。请处理以下文本并返回三个信息：
-1. 将文本翻译成${targetLang}
-2. 提供一句话简短解释其含义（通俗易懂，让外行也能理解）
-3. 确定文本所属的专业领域（如：计算机、医学、法律、经济等）
-
-每个部分使用特殊标记分开：
-===翻译开始===
-[翻译内容, 以${targetLang}语言输出]
-===翻译结束===
-===解释开始===
-[解释内容, 以${targetLang}语言输出]
-===解释结束===
-===领域开始===
-[领域内容, 以${targetLang}语言输出]
-===领域结束===`
+            content: prompt
           },
           {
             role: "user",
@@ -283,7 +295,6 @@ class OpenAIService extends AIService {
       });
 
       let fullText = "";
-      let foundAnyMarkers = false;
 
       for await (const chunk of response) {
         const content = chunk.choices[0]?.delta?.content || '';
@@ -291,54 +302,22 @@ class OpenAIService extends AIService {
 
         fullText += content;
 
-        // 记录接收到的包含标记的块
-        if (content.includes("===") && (content.includes("开始") || content.includes("结束"))) {
-          console.log("OpenAI标记块:", content);
-        }
-
-        // 检查各个标记是否存在
-        const hasTranslateMarker = fullText.includes("===翻译开始===");
-        const hasExplainMarker = fullText.includes("===解释开始===");
-        const hasDomainMarker = fullText.includes("===领域开始===");
-
-        if (hasTranslateMarker || hasExplainMarker || hasDomainMarker) {
-          foundAnyMarkers = true;
-        }
-
-        // 提取翻译内容
-        if (hasTranslateMarker) {
-          const extracted = extractContent(fullText, "===翻译开始===", "===翻译结束===");
-          if (extracted && extracted.trim()) {
-            result.translated = extracted.trim();
-          }
-        }
-
-        // 提取领域内容
-        if (hasDomainMarker) {
-          const extracted = extractContent(fullText, "===领域开始===", "===领域结束===");
-          if (extracted && extracted.trim()) {
-            result.domain = extracted.trim();
-          }
-        }
-
-        // 提取解释内容 - 只有当找到解释标记时才更新解释字段
-        if (hasExplainMarker) {
-          const extracted = extractContent(fullText, "===解释开始===", "===解释结束===");
-          if (extracted && extracted.trim()) {
-            result.explanation = extracted.trim();
-          }
-        }
+        // 提取翻译、解释和领域内容
+        const updatedResult = this.parseTranslationResponse(fullText, result);
 
         // 回调当前结果
         if (onChunk) {
-          onChunk({...result});
+          onChunk({...updatedResult});
         }
+
+        // 更新结果对象
+        result = updatedResult;
       }
 
       // 如果任何部分为空，填充默认值
-      result.translated = result.translated.trim() || text;
-      result.explanation = result.explanation.trim() || "无法获取解释";
-      result.domain = result.domain.trim() || "未知";
+      if (!result.translated) result.translated = text;
+      if (!result.explanation || result.explanation === "...") result.explanation = "无法获取解释";
+      if (!result.domain || result.domain === "...") result.domain = "未知";
 
       console.log('OpenAI完整响应结果:', {
         translated: result.translated,
@@ -352,7 +331,7 @@ class OpenAIService extends AIService {
       }
 
       // 同时缓存结果
-      const cacheKey = this.generateCacheKey('translate', text, { targetLang });
+      const cacheKey = this.generateCacheKey('translate', text, { targetLang, secondaryTargetLang });
       this.cache.set(cacheKey, result);
 
       return result;
@@ -502,6 +481,113 @@ class OpenAIService extends AIService {
         this.handleOpenAIError(error);
       }
     });
+  }
+
+  parseTranslationResponse(text, currentResult = {}) {
+    const result = { ...currentResult };
+
+    // 创建一个提取标签内容的函数
+    const extractTagContent = (text, startTag, endTag) => {
+      const startIndex = text.indexOf(startTag);
+      if (startIndex === -1) return null;
+
+      const contentStartIndex = startIndex + startTag.length;
+      let endIndex;
+
+      if (endTag) {
+        endIndex = text.indexOf(endTag, contentStartIndex);
+        if (endIndex === -1) endIndex = text.length;
+      } else {
+        endIndex = text.length;
+      }
+
+      return text.substring(contentStartIndex, endIndex).trim();
+    };
+
+    try {
+      // 使用英文标签的正则表达式提取内容
+      const translateRegex = /<TRANSLATION>([\s\S]*?)(?=<DOMAIN>|<EXPLANATION>|$)/i;
+      const domainRegex = /<DOMAIN>([\s\S]*?)(?=<TRANSLATION>|<EXPLANATION>|$)/i;
+      const explainRegex = /<EXPLANATION>([\s\S]*?)(?=<TRANSLATION>|<DOMAIN>|$)/i;
+
+      // 提取翻译内容
+      const translateMatch = text.match(translateRegex);
+      if (translateMatch && translateMatch[1].trim()) {
+        result.translated = translateMatch[1].trim();
+      }
+
+      // 提取领域内容 - 只有真正找到领域标记和内容时才更新
+      const domainMatch = text.match(domainRegex);
+      if (domainMatch && domainMatch[1].trim()) {
+        result.domain = domainMatch[1].trim();
+      }
+
+      // 提取解释内容 - 只有真正找到解释标记和内容时才更新
+      const explainMatch = text.match(explainRegex);
+      if (explainMatch && explainMatch[1].trim()) {
+        result.explanation = explainMatch[1].trim();
+      }
+
+      // 如果正则表达式方法失败，尝试备用提取方法
+      if (!result.translated) {
+        // 备用方法：通过标签定位然后提取至下一个标签
+        const translatedContent = extractTagContent(text, '<TRANSLATION>', '<DOMAIN>');
+        if (translatedContent) result.translated = translatedContent;
+      }
+
+      // 只有当尚未提取到领域内容时，才尝试备用方法提取
+      if (result.domain === "..." || !result.domain) {
+        const domainContent = extractTagContent(text, '<DOMAIN>', '<EXPLANATION>');
+        if (domainContent && domainContent.trim()) result.domain = domainContent;
+      }
+
+      // 只有当尚未提取到解释内容时，才尝试备用方法提取
+      if (result.explanation === "..." || !result.explanation) {
+        const explanationContent = extractTagContent(text, '<EXPLANATION>', null);
+        if (explanationContent && explanationContent.trim()) result.explanation = explanationContent;
+      }
+
+      // 如果仍然无法提取，尝试启发式方法
+      if (!result.translated && !text.includes('<TRANSLATION>')) {
+        const lines = text.split('\n').filter(line => line.trim());
+        const nonEmptyLines = lines.filter(line =>
+          line.trim() &&
+          !line.includes('请') &&
+          !line.includes('文本：') &&
+          !line.includes('处理') &&
+          !line.includes('<')
+        );
+
+        if (nonEmptyLines.length >= 1) {
+          result.translated = nonEmptyLines[0];
+        }
+
+        // 只有当解释仍为默认值且内容中包含符合解释特征的行时才更新解释
+        if ((result.explanation === "..." || result.explanation === "无法获取解释")
+            && nonEmptyLines.length >= 2 && !text.includes('<EXPLANATION>')) {
+          for (let i = 1; i < nonEmptyLines.length; i++) {
+            const line = nonEmptyLines[i];
+            if (line.includes('是') || line.includes('指') || line.includes('表示')) {
+              result.explanation = line;
+              break;
+            }
+          }
+        }
+
+        // 只有当领域仍为默认值且有合适的行时才更新领域
+        if ((result.domain === "..." || result.domain === "未知")
+            && nonEmptyLines.length >= 3 && !text.includes('<DOMAIN>')) {
+          const lastLine = nonEmptyLines[nonEmptyLines.length - 1];
+          if (lastLine.length < 20) {
+            result.domain = lastLine;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('解析翻译响应时出错:', e);
+    }
+
+    return result;
   }
 }
 
@@ -686,21 +772,24 @@ class OllamaService extends AIService {
     }
   }
 
-  async translate(text, targetLang) {
-    return this.withCache('translate', text, { targetLang }, async () => {
+  async translate(text, targetLang, secondaryTargetLang) {
+    return this.withCache('translate', text, { targetLang, secondaryTargetLang }, async () => {
       try {
-        const prompt = `你是一个专业的翻译和分析助手。请处理以下文本并返回三个信息：
-1. 将文本翻译成${targetLang}
-2. 提供一句话简短解释其含义（通俗易懂，让外行也能理解）
-3. 确定文本所属的专业领域（如：计算机、医学、法律、经济等）
+        // 准备智能提示，根据主选和次选语言动态调整
+        const prompt = `你是一个专业的翻译和分析助手. 请完成以下三项任务:
+1. 翻译文本, 若文本已经是${targetLang}语言则翻译成${secondaryTargetLang}语言, 否则翻译成${targetLang}语言.
+2. 分析专业领域, 始终使用${targetLang}语言回复.
+3. 提供简短易懂的解释, 始终使用${targetLang}语言回复.
 
-返回格式为JSON: {
-  "translated": "翻译结果",
-  "explanation": "一句话解释",
-  "domain": "所属领域"
-}
+严格按照以下格式回复, 保持标记完全不变:
 
-以下为需要处理的文本：
+<TRANSLATION>
+
+<DOMAIN>
+
+<EXPLANATION>
+
+以下为需要处理的文本:
 ${text}`;
 
         const result = await this.makeRequest(prompt);
@@ -736,16 +825,16 @@ ${text}`;
     });
   }
 
-  async translateStream(text, targetLang, onChunk, onComplete) {
-    return this.withCache('translate', text, { targetLang }, async () => {
+  async translateStream(text, targetLang, onChunk, onComplete, secondaryTargetLang) {
+    return this.withCache('translate', text, { targetLang, secondaryTargetLang }, async () => {
       try {
-        // 使用英文标签和特殊格式来确保不会被翻译
-        const prompt = `你是一个专业的翻译和分析助手, 请处理以下文本并返回三个信息:
-1. 将文本翻译成${targetLang}
-2. 提供一句话简短解释其含义(通俗易懂, 让外行也能理解), 以${targetLang}语言输出
-3. 确定文本所属的专业领域(如: 计算机, 医学, 法律, 经济等), 以${targetLang}语言输出
+        // 准备智能提示，根据主选和次选语言动态调整
+        const prompt = `你是一个专业的翻译和分析助手, 请完成以下三项任务:
+1. 翻译文本, 若文本已经是${targetLang}语言则翻译成${secondaryTargetLang}语言, 否则翻译成${targetLang}语言.
+2. 分析专业领域, 始终使用${targetLang}语言回复.
+3. 提供简短易懂的解释, 始终使用${targetLang}语言回复.
 
-保持以下标记完全不变, 并严格按照以下格式回复:
+严格按照以下格式回复, 保持标记完全不变:
 
 <TRANSLATION>
 
@@ -757,7 +846,7 @@ ${text}`;
 ${text}
 `;
 
-        console.log('Ollama请求翻译:', text, '目标语言:', targetLang);
+        console.log('Ollama请求翻译:', text, '主选语言:', targetLang, '次选语言:', secondaryTargetLang);
 
         let fullText = "";
         let resultObj = {
@@ -859,13 +948,13 @@ ${text}
       }
 
       // 只有当尚未提取到领域内容时，才尝试备用方法提取
-      if (result.domain === "...") {
+      if (result.domain === "..." || !result.domain) {
         const domainContent = extractTagContent(text, '<DOMAIN>', '<EXPLANATION>');
         if (domainContent && domainContent.trim()) result.domain = domainContent;
       }
 
       // 只有当尚未提取到解释内容时，才尝试备用方法提取
-      if (result.explanation === "...") {
+      if (result.explanation === "..." || !result.explanation) {
         const explanationContent = extractTagContent(text, '<EXPLANATION>', null);
         if (explanationContent && explanationContent.trim()) result.explanation = explanationContent;
       }
@@ -885,8 +974,9 @@ ${text}
           result.translated = nonEmptyLines[0];
         }
 
-        // 只有当解释仍为"未知"且内容中包含符合解释特征的行时才更新解释
-        if (result.explanation === "..." && nonEmptyLines.length >= 2 && !text.includes('<EXPLANATION>')) {
+        // 只有当解释仍为默认值且内容中包含符合解释特征的行时才更新解释
+        if ((result.explanation === "..." || result.explanation === "无法获取解释")
+            && nonEmptyLines.length >= 2 && !text.includes('<EXPLANATION>')) {
           for (let i = 1; i < nonEmptyLines.length; i++) {
             const line = nonEmptyLines[i];
             if (line.includes('是') || line.includes('指') || line.includes('表示')) {
@@ -896,8 +986,9 @@ ${text}
           }
         }
 
-        // 只有当领域仍为"未知"且有合适的行时才更新领域
-        if (result.domain === "..." && nonEmptyLines.length >= 3 && !text.includes('<DOMAIN>')) {
+        // 只有当领域仍为默认值且有合适的行时才更新领域
+        if ((result.domain === "..." || result.domain === "未知")
+            && nonEmptyLines.length >= 3 && !text.includes('<DOMAIN>')) {
           const lastLine = nonEmptyLines[nonEmptyLines.length - 1];
           if (lastLine.length < 20) {
             result.domain = lastLine;

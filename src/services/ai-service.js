@@ -739,21 +739,23 @@ ${text}`;
   async translateStream(text, targetLang, onChunk, onComplete) {
     return this.withCache('translate', text, { targetLang }, async () => {
       try {
-        // 使用尖括号作为分隔符
-        const prompt = `你是一个专业的翻译和分析助手。请将下面的文本翻译成${targetLang}，并提供解释和领域分类。
-请严格按照以下格式回复：
+        // 使用英文标签和特殊格式来确保不会被翻译
+        const prompt = `你是一个专业的翻译和分析助手, 请处理以下文本并返回三个信息:
+1. 将文本翻译成${targetLang}
+2. 提供一句话简短解释其含义(通俗易懂, 让外行也能理解), 以${targetLang}语言输出
+3. 确定文本所属的专业领域(如: 计算机, 医学, 法律, 经济等), 以${targetLang}语言输出
 
-<翻译>
-[将文本翻译成${targetLang}]
+保持以下标记完全不变, 并严格按照以下格式回复:
 
-<领域>
-[确定文本所属的专业领域（如：计算机、医学、法律、经济等）, 以${targetLang}语言输出]
+<TRANSLATION>
 
-<解释>
-[提供一句话简短解释其含义（通俗易懂，让外行也能理解）, 以${targetLang}语言输出]
+<DOMAIN>
 
-以下为需要处理的文本：
-${text}`;
+<EXPLANATION>
+
+以下为需要处理的文本:
+${text}
+`;
 
         console.log('Ollama请求翻译:', text, '目标语言:', targetLang);
 
@@ -826,10 +828,10 @@ ${text}`;
     };
 
     try {
-      // 使用正则表达式提取标签内容
-      const translateRegex = /<翻译>([\s\S]*?)(?=<领域>|<解释>|$)/;
-      const domainRegex = /<领域>([\s\S]*?)(?=<翻译>|<解释>|$)/;
-      const explainRegex = /<解释>([\s\S]*?)(?=<翻译>|<领域>|$)/;
+      // 使用英文标签的正则表达式提取内容
+      const translateRegex = /<TRANSLATION>([\s\S]*?)(?=<DOMAIN>|<EXPLANATION>|$)/i;
+      const domainRegex = /<DOMAIN>([\s\S]*?)(?=<TRANSLATION>|<EXPLANATION>|$)/i;
+      const explainRegex = /<EXPLANATION>([\s\S]*?)(?=<TRANSLATION>|<DOMAIN>|$)/i;
 
       // 提取翻译内容
       const translateMatch = text.match(translateRegex);
@@ -852,24 +854,24 @@ ${text}`;
       // 如果正则表达式方法失败，尝试备用提取方法
       if (!result.translated) {
         // 备用方法：通过标签定位然后提取至下一个标签
-        const translatedContent = extractTagContent(text, '<翻译>', '<领域>');
+        const translatedContent = extractTagContent(text, '<TRANSLATION>', '<DOMAIN>');
         if (translatedContent) result.translated = translatedContent;
       }
 
       // 只有当尚未提取到领域内容时，才尝试备用方法提取
       if (result.domain === "...") {
-        const domainContent = extractTagContent(text, '<领域>', '<解释>');
+        const domainContent = extractTagContent(text, '<DOMAIN>', '<EXPLANATION>');
         if (domainContent && domainContent.trim()) result.domain = domainContent;
       }
 
       // 只有当尚未提取到解释内容时，才尝试备用方法提取
       if (result.explanation === "...") {
-        const explanationContent = extractTagContent(text, '<解释>', null);
+        const explanationContent = extractTagContent(text, '<EXPLANATION>', null);
         if (explanationContent && explanationContent.trim()) result.explanation = explanationContent;
       }
 
       // 如果仍然无法提取，尝试启发式方法
-      if (!result.translated && !text.includes('<翻译>')) {
+      if (!result.translated && !text.includes('<TRANSLATION>')) {
         const lines = text.split('\n').filter(line => line.trim());
         const nonEmptyLines = lines.filter(line =>
           line.trim() &&
@@ -884,7 +886,7 @@ ${text}`;
         }
 
         // 只有当解释仍为"未知"且内容中包含符合解释特征的行时才更新解释
-        if (result.explanation === "..." && nonEmptyLines.length >= 2 && !text.includes('<解释>')) {
+        if (result.explanation === "..." && nonEmptyLines.length >= 2 && !text.includes('<EXPLANATION>')) {
           for (let i = 1; i < nonEmptyLines.length; i++) {
             const line = nonEmptyLines[i];
             if (line.includes('是') || line.includes('指') || line.includes('表示')) {
@@ -895,7 +897,7 @@ ${text}`;
         }
 
         // 只有当领域仍为"未知"且有合适的行时才更新领域
-        if (result.domain === "..." && nonEmptyLines.length >= 3 && !text.includes('<领域>')) {
+        if (result.domain === "..." && nonEmptyLines.length >= 3 && !text.includes('<DOMAIN>')) {
           const lastLine = nonEmptyLines[nonEmptyLines.length - 1];
           if (lastLine.length < 20) {
             result.domain = lastLine;

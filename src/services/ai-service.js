@@ -245,8 +245,8 @@ class OpenAIService extends AIService {
     try {
       let result = {
         translated: "",
-        explanation: "",
-        domain: "",
+        explanation: "...",
+        domain: "...",
         sourceLang: 'auto',
         targetLang,
         timestamp: Date.now()
@@ -313,19 +313,19 @@ class OpenAIService extends AIService {
           }
         }
 
-        // 提取解释内容
-        if (hasExplainMarker) {
-          const extracted = extractContent(fullText, "===解释开始===", "===解释结束===");
-          if (extracted && extracted.trim()) {
-            result.explanation = extracted.trim();
-          }
-        }
-
         // 提取领域内容
         if (hasDomainMarker) {
           const extracted = extractContent(fullText, "===领域开始===", "===领域结束===");
           if (extracted && extracted.trim()) {
             result.domain = extracted.trim();
+          }
+        }
+
+        // 提取解释内容 - 只有当找到解释标记时才更新解释字段
+        if (hasExplainMarker) {
+          const extracted = extractContent(fullText, "===解释开始===", "===解释结束===");
+          if (extracted && extracted.trim()) {
+            result.explanation = extracted.trim();
           }
         }
 
@@ -760,8 +760,8 @@ ${text}`;
         let fullText = "";
         let resultObj = {
           translated: "",
-          explanation: "",
-          domain: "",
+          explanation: "...",
+          domain: "...",
           sourceLang: 'auto',
           targetLang,
           timestamp: Date.now()
@@ -837,32 +837,39 @@ ${text}`;
         result.translated = translateMatch[1].trim();
       }
 
-      // 提取领域内容
+      // 提取领域内容 - 只有真正找到领域标记和内容时才更新
       const domainMatch = text.match(domainRegex);
       if (domainMatch && domainMatch[1].trim()) {
         result.domain = domainMatch[1].trim();
       }
 
-      // 提取解释内容
+      // 提取解释内容 - 只有真正找到解释标记和内容时才更新
       const explainMatch = text.match(explainRegex);
       if (explainMatch && explainMatch[1].trim()) {
         result.explanation = explainMatch[1].trim();
       }
 
       // 如果正则表达式方法失败，尝试备用提取方法
-      if (!result.translated && !result.domain && !result.explanation) {
+      if (!result.translated) {
         // 备用方法：通过标签定位然后提取至下一个标签
         const translatedContent = extractTagContent(text, '<翻译>', '<领域>');
-        const domainContent = extractTagContent(text, '<领域>', '<解释>');
-        const explanationContent = extractTagContent(text, '<解释>', null);
-
         if (translatedContent) result.translated = translatedContent;
-        if (domainContent) result.domain = domainContent;
-        if (explanationContent) result.explanation = explanationContent;
+      }
+
+      // 只有当尚未提取到领域内容时，才尝试备用方法提取
+      if (result.domain === "...") {
+        const domainContent = extractTagContent(text, '<领域>', '<解释>');
+        if (domainContent && domainContent.trim()) result.domain = domainContent;
+      }
+
+      // 只有当尚未提取到解释内容时，才尝试备用方法提取
+      if (result.explanation === "...") {
+        const explanationContent = extractTagContent(text, '<解释>', null);
+        if (explanationContent && explanationContent.trim()) result.explanation = explanationContent;
       }
 
       // 如果仍然无法提取，尝试启发式方法
-      if (!result.translated && !result.domain && !result.explanation) {
+      if (!result.translated && !text.includes('<翻译>')) {
         const lines = text.split('\n').filter(line => line.trim());
         const nonEmptyLines = lines.filter(line =>
           line.trim() &&
@@ -872,11 +879,12 @@ ${text}`;
           !line.includes('<')
         );
 
-        if (nonEmptyLines.length >= 1 && !result.translated) {
+        if (nonEmptyLines.length >= 1) {
           result.translated = nonEmptyLines[0];
         }
 
-        if (nonEmptyLines.length >= 2 && !result.explanation) {
+        // 只有当解释仍为"未知"且内容中包含符合解释特征的行时才更新解释
+        if (result.explanation === "..." && nonEmptyLines.length >= 2 && !text.includes('<解释>')) {
           for (let i = 1; i < nonEmptyLines.length; i++) {
             const line = nonEmptyLines[i];
             if (line.includes('是') || line.includes('指') || line.includes('表示')) {
@@ -886,7 +894,8 @@ ${text}`;
           }
         }
 
-        if (nonEmptyLines.length >= 3 && !result.domain) {
+        // 只有当领域仍为"未知"且有合适的行时才更新领域
+        if (result.domain === "..." && nonEmptyLines.length >= 3 && !text.includes('<领域>')) {
           const lastLine = nonEmptyLines[nonEmptyLines.length - 1];
           if (lastLine.length < 20) {
             result.domain = lastLine;

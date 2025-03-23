@@ -30,11 +30,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const targetLanguage = document.getElementById('targetLanguage');
   const secondaryTargetLanguage = document.getElementById('secondaryTargetLanguage');
   const uiLanguage = document.getElementById('uiLanguage');
+  const enableTriggerButton = document.getElementById('enableTriggerButton');
 
   // 检查是否所有必需元素都存在
-  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !secondaryTargetLanguage || !uiLanguage) {
+  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !secondaryTargetLanguage || !uiLanguage || !enableTriggerButton) {
     console.error('某些DOM元素未找到:', {
-      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, secondaryTargetLanguage, uiLanguage
+      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, secondaryTargetLanguage, uiLanguage, enableTriggerButton
     });
     showStatus(i18n.t('interfaceLoadError'), 'error');
     return;
@@ -73,6 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   ollamaModel.value = config.ollamaConfig?.model || 'qwen2.5:7b';
   targetLanguage.value = config.translationConfig?.targetLanguage || 'zh';
   secondaryTargetLanguage.value = config.translationConfig?.secondaryTargetLanguage || 'en';
+  enableTriggerButton.checked = config.generalConfig?.enableTriggerButton || false;
 
   console.log('表单填充完成');
 
@@ -193,6 +195,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       config.translationConfig.targetLanguage = targetLanguage.value;
       config.translationConfig.secondaryTargetLanguage = secondaryTargetLanguage.value;
 
+      // 确保通用配置对象存在
+      config.generalConfig = config.generalConfig || {};
+      config.generalConfig.enableTriggerButton = enableTriggerButton.checked;
+
       // 保存配置
       await saveConfig(config);
 
@@ -284,6 +290,9 @@ async function loadConfig() {
           ollamaConfig: {
             baseUrl: 'http://localhost:11434',
             model: 'qwen2.5:7b'
+          },
+          generalConfig: {
+            enableTriggerButton: false
           }
         };
 
@@ -296,6 +305,7 @@ async function loadConfig() {
         config.apiUrls = config.apiUrls || defaultConfig.apiUrls;
         config.openaiConfig = config.openaiConfig || defaultConfig.openaiConfig;
         config.ollamaConfig = config.ollamaConfig || defaultConfig.ollamaConfig;
+        config.generalConfig = config.generalConfig || defaultConfig.generalConfig;
 
         // 确保不为null的值
         config.apiUrls.openai = config.apiUrls.openai || defaultConfig.apiUrls.openai;
@@ -320,6 +330,9 @@ async function loadConfig() {
         ollamaConfig: {
           baseUrl: 'http://localhost:11434',
           model: 'qwen2.5:7b'
+        },
+        generalConfig: {
+          enableTriggerButton: false
         }
       });
     }

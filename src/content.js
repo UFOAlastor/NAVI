@@ -3,22 +3,85 @@ import { AIServiceFactory } from './services/ai-service';
 class SelectionHandler {
   constructor() {
     this.popup = null;
+    this.triggerButton = null;
     this.aiService = null;
+    this.debounceTimer = null;
+    this.isProcessing = false;
+    this.lastSelectedText = '';
+    this.config = null;
     this.isDragging = false;
-    this.wasDragging = false; // 添加标记，记录是否刚完成拖动
+    this.wasDragging = false;
+    this.dragStartPos = { x: 0, y: 0 };
+    this.dragStartScrollPos = { x: 0, y: 0 };
+    this.popupPos = { x: 0, y: 0 };
     this.init();
   }
 
   async init() {
+    console.log('NAVI: 初始化划词工具...');
+
+    // 初始化弹出窗口
+    this.popup = document.createElement('div');
+    this.popup.className = 'navi-popup';
+    this.popup.style.display = 'none';
+    document.body.appendChild(this.popup);
+
+    // 初始化触发按钮
+    this.triggerButton = document.createElement('div');
+    this.triggerButton.className = 'navi-trigger-button';
+    this.triggerButton.style.display = 'none';
+
+    // 添加图标图片元素
+    const iconImg = document.createElement('img');
+    iconImg.src = chrome.runtime.getURL('icons/icon128.png');
+    iconImg.style.width = '100%';
+    iconImg.style.height = '100%';
+    iconImg.style.margin = '0';
+    iconImg.style.padding = '0';
+    iconImg.style.display = 'block';
+    iconImg.style.objectFit = 'contain';
+    this.triggerButton.appendChild(iconImg);
+
+    document.body.appendChild(this.triggerButton);
+
     // 初始化AI服务
     const config = await this.getConfig();
     this.aiService = AIServiceFactory.createService(config.defaultService, config);
 
-    // 创建弹出窗口
-    this.createPopup();
+    // 初始化拖动功能
+    this.initDraggable();
 
     // 监听选择事件
     document.addEventListener('mouseup', this.handleSelection.bind(this));
+    document.addEventListener('touchend', this.handleSelection.bind(this));
+
+    // 监听点击事件，处理文档中的点击
+    document.addEventListener('click', (event) => {
+      // 检查点击是否在弹出窗口或其子元素上
+      if (!this.popup.contains(event.target) && !this.triggerButton.contains(event.target)) {
+        this.hidePopup();
+      }
+    });
+
+    // 监听按下Escape键关闭弹窗
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        this.hidePopup();
+      }
+    });
+
+    // 监听配置变更事件
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'CONFIG_UPDATED') {
+        console.log('NAVI: 接收到配置更新消息');
+        // 重新加载配置并更新AI服务
+        this.getConfig().then(config => {
+          this.config = config;
+          this.aiService = AIServiceFactory.createService(config.defaultService, config);
+          console.log('NAVI: 已重新初始化AI服务:', config.defaultService);
+        });
+      }
+    });
 
     // 添加一个日志，确认内容脚本已加载
     console.log('NAVI: 内容脚本已加载，划词功能已启用');
@@ -29,6 +92,8 @@ class SelectionHandler {
       document.dispatchEvent(testEvent);
       console.log('NAVI: 发送了测试划词事件');
     }, 1000);
+
+    console.log('NAVI: 选择处理器初始化完成');
   }
 
   async getConfig() {
@@ -76,231 +141,165 @@ class SelectionHandler {
     });
   }
 
-  createPopup() {
-    this.popup = document.createElement('div');
-    this.popup.className = 'navi-popup';
-    this.popup.style.display = 'none';
-    document.body.appendChild(this.popup);
-
-    // 添加拖动功能
-    this.initDraggable();
-  }
-
-  // 初始化拖动功能
-  initDraggable() {
-    // 使用实例变量而不是局部变量
-    let startX, startY; // 开始拖动时的鼠标位置
-    let startLeft, startTop; // 开始拖动时的弹窗位置
-    let dragStarted = false; // 标记是否已初始化拖动数据
-
-    // 鼠标按下事件
-    this.popup.addEventListener('mousedown', (e) => {
-      // 只允许拖动区域触发拖动
-      if (e.target.classList.contains('navi-draggable-area')) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        // 获取当前弹窗的位置（从style中获取）
-        startLeft = parseInt(this.popup.style.left) || 0;
-        startTop = parseInt(this.popup.style.top) || 0;
-        startX = e.clientX;
-        startY = e.clientY;
-        dragStarted = true;
-
-        // 设置拖动状态
-        this.isDragging = true;
-        this.wasDragging = false;
-        e.target.style.cursor = 'grabbing';
-
-        // 添加调试日志
-        console.log('拖动初始化 - 初始位置:', { startLeft, startTop, startX, startY });
-      }
-    });
-
-    // 鼠标移动事件
-    document.addEventListener('mousemove', (e) => {
-      if (this.isDragging && dragStarted) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        // 计算鼠标移动的距离
-        const deltaX = e.clientX - startX;
-        const deltaY = e.clientY - startY;
-
-        // 添加调试日志 - 每10px记录一次
-        if (Math.abs(deltaX) % 10 < 1 && Math.abs(deltaY) % 10 < 1) {
-          console.log('拖动中 - 位移:', { deltaX, deltaY });
-        }
-
-        // 根据鼠标移动距离计算新位置
-        const left = Math.round(startLeft + deltaX);
-        const top = Math.round(startTop + deltaY);
-
-        // 获取视口和文档信息
-        const windowWidth = window.innerWidth;
-        const windowHeight = window.innerHeight;
-        const scrollTop = window.scrollY || document.documentElement.scrollTop;
-        const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
-        const safeDistance = 20; // 安全边距
-
-        // 获取弹窗尺寸
-        const popupWidth = this.popup.offsetWidth;
-        const popupHeight = this.popup.offsetHeight;
-
-        // 确保弹窗不超出视口边界
-        const safeLeft = Math.max(scrollLeft + safeDistance,
-                         Math.min(left, windowWidth + scrollLeft - popupWidth - safeDistance));
-        const safeTop = Math.max(scrollTop + safeDistance,
-                        Math.min(top, windowHeight + scrollTop - popupHeight - safeDistance));
-
-        // 设置弹窗新位置
-        this.popup.style.left = `${safeLeft}px`;
-        this.popup.style.top = `${safeTop}px`;
-
-        // 标记为已经移动
-        this.wasDragging = true;
-      }
-    });
-
-    // 鼠标释放事件
-    document.addEventListener('mouseup', (e) => {
-      if (this.isDragging) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        // 恢复拖动区域的样式
-        const dragArea = this.popup.querySelector('.navi-draggable-area');
-        if (dragArea) {
-          dragArea.style.cursor = 'grab';
-        }
-
-        // 如果已经移动过，记录日志
-        if (dragStarted) {
-          console.log('拖动结束 - 最终位置:', {
-            left: this.popup.style.left,
-            top: this.popup.style.top
-          });
-        }
-
-        // 如果已经移动，设置一个短暂的定时器，阻止mouseup事件触发选择行为
-        if (this.wasDragging) {
-          // 设置一个短暂的定时器，在鼠标释放后一段时间内忽略选择事件
-          setTimeout(() => {
-            this.wasDragging = false;
-          }, 300);
-        } else {
-          // 如果没有实际拖动，立即重置状态
-          this.wasDragging = false;
-        }
-
-        // 重置拖动状态
-        this.isDragging = false;
-        dragStarted = false;
-      }
-    });
-  }
-
-  async handleSelection(event) {
-    // 添加拖动状态检查，如果正在拖动则不处理选择事件
-    if (this.isDragging) {
+  // 显示触发按钮
+  showTriggerButton(rect, selectedText) {
+    if (!this.triggerButton) {
+      console.error('NAVI: 触发按钮未初始化');
       return;
     }
 
-    // 如果刚刚完成拖动，不触发选择
-    if (this.wasDragging) {
-      this.wasDragging = false;
+    // 如果正在拖动或处理中，不显示按钮
+    if (this.isDragging || this.isProcessing) {
       return;
     }
 
-    console.log('NAVI: 划词事件被触发');
+    // 保存当前选中的文本，用于点击时触发处理
+    this.lastSelectedText = selectedText;
 
-    const selection = window.getSelection();
-    const selectedText = selection.toString().trim();
+    // 添加点击事件，当点击按钮时触发翻译
+    this.triggerButton.onclick = (e) => {
+      console.log('NAVI: 触发按钮被点击');
+      // 阻止事件冒泡
+      e.stopPropagation();
 
-    console.log('NAVI: 选中的文本:', selectedText ? selectedText : '无');
+      // 立即隐藏触发按钮
+      this.hideTriggerButton();
 
+      // 设置处理状态，防止在处理过程中再次显示触发按钮
+      this.isProcessing = true;
+
+      // 处理选中文本
+      this.processSelectedText(selectedText, rect)
+        .finally(() => {
+          // 处理完成后重置状态
+          this.isProcessing = false;
+        });
+    };
+
+    // 定义与浏览器边缘的最小安全距离
+    const safeDistance = 20; // 与浏览器边缘保持20px的安全距离
+
+    // 计算位置
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
+
+    // 触发按钮尺寸
+    const buttonSize = 24; // 按钮大小
+
+    // ========= 使用与popupShowup相同的位置计算逻辑 =========
+    // 1. 首先尝试放在右上角
+    let top = rect.top + scrollTop - buttonSize - 10;
+    let left = rect.right + scrollLeft + 10;
+
+    // 检查右上角位置是否可行
+    let positionFound = true;
+
+    // 检查右侧空间
+    if (left + buttonSize > windowWidth + scrollLeft - safeDistance) {
+      // 右侧空间不足，先尝试调整左侧位置，但仍保持在右半侧
+      const centerX = rect.left + (rect.width / 2) + scrollLeft;
+      left = Math.min(windowWidth + scrollLeft - buttonSize - safeDistance,
+                     Math.max(centerX, windowWidth / 2 + scrollLeft));
+
+      // 如果仍然不可行（没有足够空间），标记为位置未找到
+      if (left + buttonSize > windowWidth + scrollLeft - safeDistance) {
+        positionFound = false;
+      }
+    }
+
+    // 检查上方空间
+    if (top < scrollTop + safeDistance) {
+      // 上方空间不足，尝试放在下方但仍偏向右侧
+      top = rect.bottom + scrollTop + 10;
+
+      // 如果下方也不够，标记为位置未找到
+      if (top + buttonSize > windowHeight + scrollTop - safeDistance) {
+        positionFound = false;
+      }
+    }
+
+    // 如果上述尝试均失败，最后才考虑左侧
+    if (!positionFound) {
+      // 尝试放在左侧
+      left = rect.left + scrollLeft - buttonSize - 10;
+
+      // 尝试上方
+      top = rect.top + scrollTop - buttonSize - 10;
+
+      // 如果上方不行，尝试下方
+      if (top < scrollTop + safeDistance) {
+        top = rect.bottom + scrollTop + 10;
+      }
+
+      // 如果左侧空间也不足，尽量居中显示
+      if (left < scrollLeft + safeDistance) {
+        left = scrollLeft + (windowWidth - buttonSize) / 2;
+      }
+    }
+
+    // 最终确保不超出视口边界
+    top = Math.max(scrollTop + safeDistance, Math.min(top, windowHeight + scrollTop - buttonSize - safeDistance));
+    left = Math.max(scrollLeft + safeDistance, Math.min(left, windowWidth + scrollLeft - buttonSize - safeDistance));
+
+    // 设置按钮位置
+    this.triggerButton.style.top = `${top}px`;
+    this.triggerButton.style.left = `${left}px`;
+    this.triggerButton.style.display = 'flex';
+  }
+
+  // 隐藏触发按钮
+  hideTriggerButton() {
+    if (this.triggerButton) {
+      console.log('NAVI: 隐藏触发按钮');
+      this.triggerButton.style.display = 'none';
+
+      // 清除任何可能的点击事件，防止多次绑定
+      this.triggerButton.onclick = null;
+    }
+  }
+
+  // 处理选中的文本
+  async processSelectedText(selectedText, rect) {
     if (!selectedText) {
-      this.hidePopup();
+      this.isProcessing = false;
       return;
     }
-
-    // 检查选中文本是否在输入框或插件结果框中
-    const range = selection.getRangeAt(0);
-    const container = range.commonAncestorContainer;
-
-    // 获取选中文本所在的元素
-    let element = container;
-    if (container.nodeType === Node.TEXT_NODE) {
-      element = container.parentElement;
-    }
-
-    // 获取源事件目标元素
-    const targetElement = event.target;
-    console.log('NAVI: 事件目标元素:', targetElement);
-
-    // 检查是否在输入框中 - 先检查事件目标元素
-    if (this.isInputElement(targetElement)) {
-      console.log('NAVI: 选中文本在输入框中(事件目标)，不触发划词', targetElement);
-      return;
-    }
-
-    // 检查是否在输入框中 - 检查选中文本所在元素
-    if (this.isInputElement(element)) {
-      console.log('NAVI: 选中文本在输入框中(直接元素)，不触发划词', element);
-      return;
-    }
-
-    // 检查是否在输入框中 - 向上遍历DOM树检查所有祖先元素
-    let currentElement = element;
-    while (currentElement && currentElement !== document.body) {
-      if (this.isInputElement(currentElement)) {
-        console.log('NAVI: 选中文本在输入框中(祖先元素)，不触发划词', currentElement);
-        return;
-      }
-      currentElement = currentElement.parentElement;
-    }
-
-    // 检查是否在插件结果框中
-    if (element.closest('.navi-popup') || element.closest('.navi-result')) {
-      console.log('NAVI: 选中文本在插件结果框中，不触发划词');
-      return;
-    }
-
-    // 获取选中文本的位置
-    const rect = range.getBoundingClientRect();
-
-    console.log('NAVI: 选中文本的位置:', rect);
-
-    // 检查配置
-    const config = await this.getConfig();
-    // 将配置保存到实例变量，以便其他方法可以访问
-    this.config = config;
-    console.log('NAVI: 配置加载完成', config);
-
-    // 确保AI服务已初始化
-    if (!this.aiService) {
-      console.log('NAVI: 重新初始化AI服务');
-      this.aiService = AIServiceFactory.createService(config.defaultService, config);
-    }
-
-    // 获取目标语言配置
-    const targetLanguage = config.translationConfig?.targetLanguage || 'zh';
-    const secondaryTargetLanguage = config.translationConfig?.secondaryTargetLanguage || 'en';
-
-    // 检查缓存中是否已存在当前文本的处理结果
-    const cacheKey = this.aiService.generateCacheKey('translate', selectedText, { targetLang: targetLanguage, secondaryTargetLang: secondaryTargetLanguage });
-    const cachedResult = this.aiService.cache.get(cacheKey);
-
-    if (cachedResult) {
-      console.log('NAVI: 从缓存中获取结果:', cachedResult);
-      this.showResultPopup(rect, cachedResult);
-      return;
-    }
-
-    // 显示加载状态
-    this.showLoadingPopup(rect);
 
     try {
+      // 确保触发按钮已隐藏
+      this.hideTriggerButton();
+
+      // 检查配置
+      const config = await this.getConfig();
+      // 将配置保存到实例变量，以便其他方法可以访问
+      this.config = config;
+      console.log('NAVI: 配置加载完成', config);
+
+      // 确保AI服务已初始化
+      if (!this.aiService) {
+        console.log('NAVI: 重新初始化AI服务');
+        this.aiService = AIServiceFactory.createService(config.defaultService, config);
+      }
+
+      // 获取目标语言配置
+      const targetLanguage = config.translationConfig?.targetLanguage || 'zh';
+      const secondaryTargetLanguage = config.translationConfig?.secondaryTargetLanguage || 'en';
+
+      // 检查缓存中是否已存在当前文本的处理结果
+      const cacheKey = this.aiService.generateCacheKey('translate', selectedText, { targetLang: targetLanguage, secondaryTargetLang: secondaryTargetLanguage });
+      const cachedResult = this.aiService.cache.get(cacheKey);
+
+      if (cachedResult) {
+        console.log('NAVI: 从缓存中获取结果:', cachedResult);
+        this.showResultPopup(rect, cachedResult);
+        return;
+      }
+
+      // 显示加载状态
+      this.showLoadingPopup(rect);
+
       console.log('NAVI: 发送AI请求', selectedText);
 
       // 预备一个初始结果对象，用于提供默认值并初始化结果框
@@ -375,8 +374,12 @@ class SelectionHandler {
         }
       }
     } catch (error) {
-      console.error('处理选中文本时出错:', error);
+      console.error('NAVI: 处理文本时出错', error);
+      // 确保在出错时也会显示错误弹窗
       this.showErrorPopup(rect, error);
+    } finally {
+      // 确保处理状态被重置
+      this.isProcessing = false;
     }
   }
 
@@ -474,7 +477,15 @@ class SelectionHandler {
     if (this.isDragging) {
       return;
     }
-    this.popup.style.display = 'none';
+
+    if (this.popup) {
+      this.popup.style.display = 'none';
+    }
+
+    // 同时隐藏触发按钮
+    this.hideTriggerButton();
+
+    console.log('NAVI: 弹窗和触发按钮已隐藏');
   }
 
   showLoadingPopup(rect) {
@@ -976,6 +987,210 @@ class SelectionHandler {
     setTimeout(() => {
       this.popup.classList.remove('navi-completion-effect');
     }, 1500); // 动画持续1.5秒
+  }
+
+  async handleSelection(event) {
+    // 添加拖动状态检查，如果正在拖动则不处理选择事件
+    if (this.isDragging) {
+      return;
+    }
+
+    // 如果刚刚完成拖动，不触发选择
+    if (this.wasDragging) {
+      this.wasDragging = false;
+      return;
+    }
+
+    console.log('NAVI: 划词事件被触发');
+
+    const selection = window.getSelection();
+    const selectedText = selection.toString().trim();
+
+    console.log('NAVI: 选中的文本:', selectedText ? selectedText : '无');
+
+    if (!selectedText) {
+      this.hidePopup();
+      this.hideTriggerButton();
+      return;
+    }
+
+    // 检查选中文本是否在输入框或插件结果框中
+    const range = selection.getRangeAt(0);
+    const container = range.commonAncestorContainer;
+
+    // 获取选中文本所在的元素
+    let element = container;
+    if (container.nodeType === Node.TEXT_NODE) {
+      element = container.parentElement;
+    }
+
+    // 获取源事件目标元素
+    const targetElement = event.target;
+    console.log('NAVI: 事件目标元素:', targetElement);
+
+    // 检查是否在输入框中 - 先检查事件目标元素
+    if (this.isInputElement(targetElement)) {
+      console.log('NAVI: 选中文本在输入框中(事件目标)，不触发划词', targetElement);
+      return;
+    }
+
+    // 检查是否在输入框中 - 检查选中文本所在元素
+    if (this.isInputElement(element)) {
+      console.log('NAVI: 选中文本在输入框中(直接元素)，不触发划词', element);
+      return;
+    }
+
+    // 检查是否在输入框中 - 向上遍历DOM树检查所有祖先元素
+    let currentElement = element;
+    while (currentElement && currentElement !== document.body) {
+      if (this.isInputElement(currentElement)) {
+        console.log('NAVI: 选中文本在输入框中(祖先元素)，不触发划词', currentElement);
+        return;
+      }
+      currentElement = currentElement.parentElement;
+    }
+
+    // 检查是否在插件结果框中
+    if (element.closest('.navi-popup') || element.closest('.navi-result') || element.closest('.navi-trigger-button')) {
+      console.log('NAVI: 选中文本在插件结果框中，不触发划词');
+      return;
+    }
+
+    // 获取选中文本的位置
+    const rect = range.getBoundingClientRect();
+
+    console.log('NAVI: 选中文本的位置:', rect);
+
+    // 检查配置
+    const config = await this.getConfig();
+    // 将配置保存到实例变量，以便其他方法可以访问
+    this.config = config;
+    console.log('NAVI: 配置加载完成', config);
+
+    // 检查是否启用了触发按钮
+    if (config.generalConfig?.enableTriggerButton) {
+      console.log('NAVI: 使用触发按钮模式');
+      // 显示触发按钮
+      this.showTriggerButton(rect, selectedText);
+      return;
+    }
+
+    // 如果未启用触发按钮，直接处理选中文本
+    this.processSelectedText(selectedText, rect);
+  }
+
+  // 初始化拖动功能
+  initDraggable() {
+    // 使用实例变量而不是局部变量
+    let startX, startY; // 开始拖动时的鼠标位置
+    let startLeft, startTop; // 开始拖动时的弹窗位置
+    let dragStarted = false; // 标记是否已初始化拖动数据
+
+    // 鼠标按下事件
+    this.popup.addEventListener('mousedown', (e) => {
+      // 只允许拖动区域触发拖动
+      if (e.target.classList.contains('navi-draggable-area')) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // 获取当前弹窗的位置（从style中获取）
+        startLeft = parseInt(this.popup.style.left) || 0;
+        startTop = parseInt(this.popup.style.top) || 0;
+        startX = e.clientX;
+        startY = e.clientY;
+        dragStarted = true;
+
+        // 设置拖动状态
+        this.isDragging = true;
+        this.wasDragging = false;
+        e.target.style.cursor = 'grabbing';
+
+        // 添加调试日志
+        console.log('拖动初始化 - 初始位置:', { startLeft, startTop, startX, startY });
+      }
+    });
+
+    // 鼠标移动事件
+    document.addEventListener('mousemove', (e) => {
+      if (this.isDragging && dragStarted) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // 计算鼠标移动的距离
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+
+        // 添加调试日志 - 每10px记录一次
+        if (Math.abs(deltaX) % 10 < 1 && Math.abs(deltaY) % 10 < 1) {
+          console.log('拖动中 - 位移:', { deltaX, deltaY });
+        }
+
+        // 根据鼠标移动距离计算新位置
+        const left = Math.round(startLeft + deltaX);
+        const top = Math.round(startTop + deltaY);
+
+        // 获取视口和文档信息
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
+        const safeDistance = 20; // 安全边距
+
+        // 获取弹窗尺寸
+        const popupWidth = this.popup.offsetWidth;
+        const popupHeight = this.popup.offsetHeight;
+
+        // 确保弹窗不超出视口边界
+        const safeLeft = Math.max(scrollLeft + safeDistance,
+                       Math.min(left, windowWidth + scrollLeft - popupWidth - safeDistance));
+        const safeTop = Math.max(scrollTop + safeDistance,
+                      Math.min(top, windowHeight + scrollTop - popupHeight - safeDistance));
+
+        // 设置弹窗新位置
+        this.popup.style.left = `${safeLeft}px`;
+        this.popup.style.top = `${safeTop}px`;
+
+        // 标记为已经移动
+        this.wasDragging = true;
+      }
+    });
+
+    // 鼠标释放事件
+    document.addEventListener('mouseup', (e) => {
+      if (this.isDragging) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // 恢复拖动区域的样式
+        const dragArea = this.popup.querySelector('.navi-draggable-area');
+        if (dragArea) {
+          dragArea.style.cursor = 'grab';
+        }
+
+        // 如果已经移动过，记录日志
+        if (dragStarted) {
+          console.log('拖动结束 - 最终位置:', {
+            left: this.popup.style.left,
+            top: this.popup.style.top
+          });
+        }
+
+        // 如果已经移动，设置一个短暂的定时器，阻止mouseup事件触发选择行为
+        if (this.wasDragging) {
+          // 设置一个短暂的定时器，在鼠标释放后一段时间内忽略选择事件
+          setTimeout(() => {
+            this.wasDragging = false;
+          }, 300);
+        } else {
+          // 如果没有实际拖动，立即重置状态
+          this.wasDragging = false;
+        }
+
+        // 重置拖动状态
+        this.isDragging = false;
+        dragStarted = false;
+      }
+    });
   }
 }
 

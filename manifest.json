@@ -50,7 +50,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["utils/i18n.js"],
+      "resources": ["utils/i18n.js", "icons/*.png"],
       "matches": ["<all_urls>"]
     }
   ]

@@ -5,6 +5,9 @@ const translations = {
     'title': 'NAVI - 智能划词助手',
     // 设置页面
     'settings': 'NAVI 设置',
+    'generalSettings': '通用设置',
+    'enableTriggerButton': '触发按钮',
+    'triggerButtonDescription': '启用后，划词不会立即触发解释，而是显示触发按钮',
     'defaultAiService': '默认AI服务',
     'selectDefaultAiService': '选择默认AI服务：',
     'translationSettings': '翻译设置',
@@ -51,6 +54,9 @@ const translations = {
     'title': 'NAVI - Smart Text Selection Assistant',
     // 设置页面
     'settings': 'NAVI Settings',
+    'generalSettings': 'General Settings',
+    'enableTriggerButton': 'Trigger Button',
+    'triggerButtonDescription': 'When enabled, the text selection will not immediately trigger an explanation, but instead display a trigger button',
     'defaultAiService': 'Default AI Service',
     'selectDefaultAiService': 'Select Default AI Service:',
     'translationSettings': 'Translation Settings',

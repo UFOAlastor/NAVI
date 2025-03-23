@@ -76,6 +76,22 @@
       background: #1557b0;
     }
 
+    .option-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .option-row input[type="checkbox"] {
+      margin-right: 8px;
+    }
+
+    .option-description {
+      margin-left: 8px;
+      color: #666;
+      font-size: 12px;
+    }
+
     .status {
       font-size: 14px;
       margin-top: 0;
@@ -146,6 +162,15 @@
     <div class="header">
       <img src="../icons/icon48.png" alt="NAVI">
       <h1 data-i18n="settings">NAVI 设置</h1>
+    </div>
+
+    <div class="section">
+      <div class="section-title" data-i18n="generalSettings">通用设置</div>
+      <div class="option-row">
+        <label for="enableTriggerButton" data-i18n="enableTriggerButton">触发按钮</label>
+        <input type="checkbox" id="enableTriggerButton">
+        <span class="option-description" data-i18n="triggerButtonDescription">启用后，划词不会立即触发解释，而是显示触发按钮</span>
+      </div>
     </div>
 
     <div class="section">

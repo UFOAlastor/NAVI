@@ -97,12 +97,22 @@
       color: var(--text-primary);
     }
 
+    .header-left .version-number {
+      font-size: 8px !important;
+      color: var(--text-secondary) !important;
+      margin-left: 3px !important;
+      font-weight: normal !important;
+      align-self: flex-end !important;
+      margin-bottom: 1px !important;
+      display: inline-block !important;
+    }
+
     .header select {
       padding: 2px 4px;
       font-size: 12px;
       background-color: var(--section-bg);
       border-color: transparent;
-      width: auto;
+      width: 120px; /* 固定语言选择框宽度 */
       border-radius: 4px;
     }
 
@@ -110,7 +120,7 @@
       display: flex;
       flex-direction: column;
       gap: var(--item-gap);
-      padding: 8px 10px;
+      padding: 0px 5px 0px; /* 减少顶部内边距 */
       background-color: var(--section-bg);
       border-radius: var(--border-radius);
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
@@ -123,6 +133,7 @@
       color: var(--text-primary);
       margin-bottom: 3px;
       padding-bottom: 3px;
+      margin-top: 0px; /* 强制设置上边距 */
       border-bottom: 1px solid var(--border-color);
     }
 
@@ -257,7 +268,7 @@
 
     .tooltip .tooltip-text {
       visibility: hidden;
-      width: 200px;
+      width: 240px;
       background-color: #555;
       color: #fff;
       text-align: center;
@@ -267,7 +278,7 @@
       z-index: 1;
       bottom: 125%;
       left: 50%;
-      margin-left: -100px;
+      margin-left: -120px;
       opacity: 0;
       transition: opacity 0.3s;
       font-weight: normal;
@@ -421,6 +432,7 @@
       <div class="header-left">
         <img src="../icons/icon48.png" alt="NAVI">
         <h1 data-i18n="settings">NAVI 设置</h1>
+        <span class="version-number">v1.1.1</span> <!-- ATTENTION 注意同步更新版本号 -->
       </div>
       <select id="uiLanguage">
         <option value="zh" data-i18n="zh_lang">中文 (简体)</option>
@@ -481,7 +493,23 @@
         </select>
       </div>
       <div class="form-group">
+        <label class="form-label" for="primaryLangBehavior" data-i18n="primaryLangBehavior">主选语言处理方式：</label>
+        <div class="tooltip" style="display: inline-block;">
+          <div class="tooltip-icon"></div>
+          <span class="tooltip-text" data-i18n="primaryLangBehaviorDescription">选择当文本包含主选语言时的处理方式</span>
+        </div>
+        <select id="primaryLangBehavior" aria-label="主选语言处理方式">
+          <option value="auto" data-i18n="primaryLangBehavior_auto">自动翻译解释 (默认)</option>
+          <option value="button" data-i18n="primaryLangBehavior_button">显示触发按钮</option>
+          <option value="disable" data-i18n="primaryLangBehavior_disable">关闭</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label class="form-label" for="secondaryTargetLanguage" data-i18n="selectSecondaryTargetLanguage">选择次选目标语言：</label>
+        <div class="tooltip" style="display: inline-block;">
+          <div class="tooltip-icon"></div>
+          <span class="tooltip-text" data-i18n="secondaryTargetLanguageDescription">当检测到文本是主选语言时，将翻译成次选语言</span>
+        </div>
         <select id="secondaryTargetLanguage" aria-label="次选目标语言">
           <option value="en" data-i18n="en_lang">英文</option>
           <option value="zh" data-i18n="zh_lang">中文 (简体)</option>

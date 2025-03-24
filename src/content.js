@@ -114,7 +114,8 @@ class SelectionHandler {
           },
           translationConfig: {
             targetLanguage: 'zh',
-            secondaryTargetLanguage: 'en'
+            secondaryTargetLanguage: 'en',
+            primaryLangBehavior: 'auto'
           },
           generalConfig: {
             enableTriggerButton: false,
@@ -898,7 +899,70 @@ class SelectionHandler {
     return textMap[targetLang] || textMap['en'];
   }
 
-  // 添加辅助方法，用于检测输入元素
+  // 判断文本是否包含指定语言的字符
+  containsLanguage(text, lang) {
+    if (!text) return false;
+
+    // 定义不同语言的Unicode范围
+    const langRanges = {
+      'zh': [
+        [0x4E00, 0x9FFF],   // CJK统一汉字
+        [0x3400, 0x4DBF],   // CJK扩展A
+        [0x20000, 0x2A6DF], // CJK扩展B
+        [0x2A700, 0x2B73F], // CJK扩展C
+        [0x2B740, 0x2B81F], // CJK扩展D
+        [0x2B820, 0x2CEAF], // CJK扩展E
+        [0x2CEB0, 0x2EBEF], // CJK扩展F
+        [0xF900, 0xFAFF]    // CJK兼容汉字
+      ],
+      'ja': [
+        [0x3040, 0x309F],   // 平假名
+        [0x30A0, 0x30FF],   // 片假名
+        [0x4E00, 0x9FFF],   // 汉字(与中文共享)
+        [0xFF66, 0xFF9F]    // 半角片假名
+      ],
+      'ko': [
+        [0xAC00, 0xD7AF],   // 韩文音节
+        [0x1100, 0x11FF],   // 韩文字母
+        [0x3130, 0x318F]    // 韩文兼容字母
+      ],
+      'ru': [
+        [0x0400, 0x04FF],   // 西里尔字母
+        [0x0500, 0x052F]    // 西里尔字母扩展
+      ],
+      'ar': [
+        [0x0600, 0x06FF],   // 阿拉伯字母
+        [0x0750, 0x077F],   // 阿拉伯字母扩展
+        [0x08A0, 0x08FF],   // 阿拉伯字母扩展-A
+        [0xFB50, 0xFDFF],   // 阿拉伯表现形式A
+        [0xFE70, 0xFEFF]    // 阿拉伯表现形式B
+      ]
+    };
+
+    // 对于未特别定义范围的西方语言，我们不做特殊检测
+    // 因为大部分西方语言使用相似的拉丁字母，很难区分
+    if (!langRanges[lang]) {
+      console.log(`NAVI: 未定义 ${lang} 语言的Unicode范围, 默认返回false`);
+      return false;
+    }
+
+    // 检查文本中是否包含指定语言的字符
+    const ranges = langRanges[lang];
+    for (let i = 0; i < text.length; i++) {
+      const charCode = text.charCodeAt(i);
+
+      for (const [start, end] of ranges) {
+        if (charCode >= start && charCode <= end) {
+          console.log(`NAVI: 检测到 ${lang} 语言字符: ${text[i]} (${charCode})`);
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  // 检查输入元素，避免在输入框中触发划词
   isInputElement(el) {
     if (!el || !el.tagName) return false;
 
@@ -1084,12 +1148,47 @@ class SelectionHandler {
     this.config = config;
     console.log('NAVI: 配置加载完成', config);
 
-    // 检查是否启用了触发按钮
-    if (config.generalConfig?.enableTriggerButton) {
-      console.log('NAVI: 使用触发按钮模式');
-      // 显示触发按钮
-      this.showTriggerButton(rect, selectedText);
-      return;
+    // 获取主选语言和主选语言行为设置
+    const primaryLang = config.translationConfig?.targetLanguage || 'zh';
+    const primaryLangBehavior = config.translationConfig?.primaryLangBehavior || 'auto';
+
+    // 检测文本是否包含主选语言
+    const containsPrimaryLang = this.containsLanguage(selectedText, primaryLang);
+    console.log(`NAVI: 文本是否包含主选语言(${primaryLang}): ${containsPrimaryLang}`);
+
+    if (containsPrimaryLang) {
+      // 根据主选语言行为设置处理
+      console.log(`NAVI: 文本包含主选语言，应用行为设置: ${primaryLangBehavior}`);
+
+      switch (primaryLangBehavior) {
+        case 'disable':
+          // 不做任何处理
+          console.log('NAVI: 主选语言行为设置为关闭，不处理该文本');
+          return;
+
+        case 'button':
+          // 显示触发按钮
+          console.log('NAVI: 主选语言行为设置为显示触发按钮');
+          this.showTriggerButton(rect, selectedText);
+          return;
+
+        case 'auto':
+        default:
+          // 自动处理，继续执行后续代码
+          console.log('NAVI: 主选语言行为设置为自动处理');
+          break;
+      }
+    } else {
+      // 文本不包含主选语言，使用全局触发按钮设置
+      console.log('NAVI: 文本不包含主选语言，使用全局触发按钮设置');
+
+      // 检查是否启用了触发按钮
+      if (config.generalConfig?.enableTriggerButton) {
+        console.log('NAVI: 使用触发按钮模式');
+        // 显示触发按钮
+        this.showTriggerButton(rect, selectedText);
+        return;
+      }
     }
 
     // 如果未启用触发按钮，使用延时触发

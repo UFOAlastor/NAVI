@@ -1,6 +1,6 @@
 {
   "name": "navi",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Intelligent text selection assistant supporting multiple AI platforms",
   "main": "src/background.js",
   "scripts": {

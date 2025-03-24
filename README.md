@@ -20,7 +20,7 @@ NAVI是一个强大的浏览器划词翻译插件，支持多AI平台和本地�
 1. 克隆仓库：
 
 ```bash
-git clone https://github.com/yourusername/navi.git
+git clone https://github.com/UFOAlastor/NAVI.git
 cd navi
 ```
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NAVI - Smart Text Selection Assistant",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Intelligent text selection translation and explanation tool supporting multiple AI platforms and local models",
   "permissions": [
     "storage",

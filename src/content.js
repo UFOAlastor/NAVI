@@ -982,6 +982,22 @@ class SelectionHandler {
       return true;
     }
 
+    // 获取元素的类名和ID
+    const classNames = el.className ? el.className.toLowerCase() : '';
+    const idName = el.id ? el.id.toLowerCase() : '';
+
+    // 显式排除标题和弹出框元素
+    const excludedElements = [
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', // 标题元素
+      'title', 'header', 'popup', 'modal', 'dialog', 'tooltip' // 常见弹出框类名
+    ];
+
+    if (excludedElements.includes(tagName) ||
+        excludedElements.some(name => classNames.includes(name))) {
+      console.log('NAVI: 检测到标题或弹出框元素，不作为输入元素处理');
+      return false;
+    }
+
     // 检查contentEditable属性
     if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
       console.log('NAVI: 检测到可编辑元素');
@@ -989,18 +1005,14 @@ class SelectionHandler {
     }
 
     // 检查role属性
-    if (el.getAttribute('role') === 'textbox' ||
-        el.getAttribute('role') === 'searchbox' ||
-        el.getAttribute('role') === 'combobox' ||
-        el.getAttribute('role') === 'input') {
-      console.log('NAVI: 检测到textbox/searchbox/combobox/input角色元素');
+    const inputRoles = ['textbox', 'searchbox', 'combobox', 'input'];
+    if (inputRoles.includes(el.getAttribute('role'))) {
+      console.log('NAVI: 检测到输入角色元素');
       return true;
     }
 
-    // 检查特定的类名和属性，用于捕获自定义搜索框
-    const classNames = el.className ? el.className.toLowerCase() : '';
-    const idName = el.id ? el.id.toLowerCase() : '';
-    if (
+    // 更严格的输入元素检查
+    const isInputLike = (
       classNames.includes('search') ||
       classNames.includes('input') ||
       classNames.includes('editor') ||
@@ -1018,21 +1030,20 @@ class SelectionHandler {
       el.getAttribute('autocomplete') === 'on' ||
       el.getAttribute('type') === 'search' ||
       el.getAttribute('type') === 'text'
-    ) {
-      console.log('NAVI: 检测到搜索框/输入框元素');
-      return true;
-    }
+    );
 
-    // 检查元素是否有输入框样式特征
-    const computedStyle = window.getComputedStyle(el);
-    if (
-      (computedStyle.border && !computedStyle.border.includes('none')) &&
-      computedStyle.backgroundColor &&
-      computedStyle.padding &&
-      (computedStyle.cursor === 'text' || computedStyle.cursor === 'pointer')
-    ) {
-      console.log('NAVI: 检测到具有输入框样式特征的元素');
-      return true;
+    if (isInputLike) {
+      // 额外检查元素是否实际可交互
+      const isInteractive = (
+        !el.disabled &&
+        el.tabIndex >= 0 &&
+        window.getComputedStyle(el).pointerEvents !== 'none'
+      );
+
+      if (isInteractive) {
+        console.log('NAVI: 检测到可交互的搜索框/输入框元素');
+        return true;
+      }
     }
 
     // 检查特殊情况：Google搜索框
@@ -1155,50 +1166,35 @@ class SelectionHandler {
       return;
     }
 
-    // 检查选中文本是否在输入框或插件结果框中
-    const range = selection.getRangeAt(0);
-    const container = range.commonAncestorContainer;
-
-    // 获取选中文本所在的元素
-    let element = container;
-    if (container.nodeType === Node.TEXT_NODE) {
-      element = container.parentElement;
-    }
-
     // 获取源事件目标元素
     const targetElement = event.target;
     console.log('NAVI: 事件目标元素:', targetElement);
 
-    // 检查是否在输入框中 - 先检查事件目标元素
+    // 优先检查事件目标元素是否为输入元素
     if (this.isInputElement(targetElement)) {
       console.log('NAVI: 选中文本在输入框中(事件目标)，不触发划词', targetElement);
       return;
     }
 
-    // 检查是否在输入框中 - 检查选中文本所在元素
-    if (this.isInputElement(element)) {
-      console.log('NAVI: 选中文本在输入框中(直接元素)，不触发划词', element);
-      return;
-    }
-
-    // 检查是否在输入框中 - 向上遍历DOM树检查所有祖先元素
-    let currentElement = element;
-    while (currentElement && currentElement !== document.body) {
-      if (this.isInputElement(currentElement)) {
-        console.log('NAVI: 选中文本在输入框中(祖先元素)，不触发划词', currentElement);
-        return;
-      }
-      currentElement = currentElement.parentElement;
-    }
-
-    // 检查是否在插件结果框中
-    if (element.closest('.navi-popup') || element.closest('.navi-result') || element.closest('.navi-trigger-button')) {
+    // 检查选中文本是否在插件结果框中
+    if (targetElement.closest('.navi-popup') || targetElement.closest('.navi-result') || targetElement.closest('.navi-trigger-button')) {
       console.log('NAVI: 选中文本在插件结果框中，不触发划词');
       return;
     }
 
     // 获取选中文本的位置
+    const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
+
+    // 检查是否在插件结果框中
+    const element = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+      ? range.commonAncestorContainer.parentElement
+      : range.commonAncestorContainer;
+
+    if (element.closest('.navi-popup') || element.closest('.navi-result') || element.closest('.navi-trigger-button')) {
+      console.log('NAVI: 选中文本在插件结果框中，不触发划词');
+      return;
+    }
 
     console.log('NAVI: 选中文本的位置:', rect);
 

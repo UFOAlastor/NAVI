@@ -540,46 +540,32 @@ function showStatus(message, type) {
   console.log('显示状态消息:', message, type);
   const statusElement = document.getElementById('status');
 
-  if (!statusElement) {
-    console.error('状态元素未找到，无法显示消息:', message);
-    // 尝试创建一个临时状态元素
-    try {
-      const tempStatus = document.createElement('div');
-      tempStatus.id = 'status';
-      tempStatus.className = `status ${type || 'error'}`;
-      const container = document.querySelector('.container');
-      const languageSwitcher = document.querySelector('.language-switcher');
-      if (container && languageSwitcher) {
-        container.insertBefore(tempStatus, languageSwitcher.nextSibling);
-      } else {
-        document.body.appendChild(tempStatus);
-      }
+  if (!statusElement || !statusElement.className) {
+    console.error('状态元素未找到或无效，无法显示消息:', message);
+    return;
+  }
 
-      // 递归调用自身使用新创建的元素
-      showStatus(message, type);
-      return;
-    } catch (err) {
-      console.error('创建临时状态元素失败:', err);
-      return;
+  try {
+    // 根据状态类型添加不同的图标
+    let icon = '';
+    if (type === 'success') {
+      icon = '<span style="color: #137333; font-size: 16px; margin-right: 6px;">✓</span>';
+    } else if (type === 'error') {
+      icon = '<span style="color: #c5221f; font-size: 16px; margin-right: 6px;">⚠</span>';
+    } else if (type === 'info') {
+      icon = '<span style="color: #4285f4; font-size: 16px; margin-right: 6px;">ℹ</span>';
     }
+
+    // 首先重置所有动画状态
+    statusElement.style.animation = '';
+    statusElement.classList.remove('show', 'hide');
+
+    statusElement.innerHTML = icon + message;
+    statusElement.className = `status ${type || ''}`;
+  } catch (error) {
+    console.error('更新状态元素时出错:', error);
+    return;
   }
-
-  // 根据状态类型添加不同的图标
-  let icon = '';
-  if (type === 'success') {
-    icon = '<span style="color: #137333; font-size: 16px; margin-right: 6px;">✓</span>';
-  } else if (type === 'error') {
-    icon = '<span style="color: #c5221f; font-size: 16px; margin-right: 6px;">⚠</span>';
-  } else if (type === 'info') {
-    icon = '<span style="color: #4285f4; font-size: 16px; margin-right: 6px;">ℹ</span>';
-  }
-
-  // 首先重置所有动画状态
-  statusElement.style.animation = '';
-  statusElement.classList.remove('show', 'hide');
-
-  statusElement.innerHTML = icon + message;
-  statusElement.className = `status ${type || ''}`;
 
   // 先设置显示，但不要立即添加动画类
   statusElement.style.display = 'block';

@@ -31,14 +31,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   const secondaryTargetLanguage = document.getElementById('secondaryTargetLanguage');
   const uiLanguage = document.getElementById('uiLanguage');
   const enableTriggerButton = document.getElementById('enableTriggerButton');
+  const ignoreLinks = document.getElementById('ignoreLinks');
   const selectionDelay = document.getElementById('selectionDelay');
   const selectionDelayContainer = document.getElementById('selectionDelayContainer');
   const primaryLangBehavior = document.getElementById('primaryLangBehavior');
 
   // 检查是否所有必需元素都存在
-  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !secondaryTargetLanguage || !uiLanguage || !enableTriggerButton || !selectionDelay || !selectionDelayContainer || !primaryLangBehavior) {
+  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !secondaryTargetLanguage || !uiLanguage || !enableTriggerButton || !ignoreLinks || !selectionDelay || !selectionDelayContainer || !primaryLangBehavior) {
     console.error('某些DOM元素未找到:', {
-      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, secondaryTargetLanguage, uiLanguage, enableTriggerButton, selectionDelay, selectionDelayContainer, primaryLangBehavior
+      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, secondaryTargetLanguage, uiLanguage, enableTriggerButton, ignoreLinks, selectionDelay, selectionDelayContainer, primaryLangBehavior
     });
     showStatus(i18n.t('interfaceLoadError'), 'error');
     return;
@@ -78,6 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   targetLanguage.value = config.translationConfig?.targetLanguage || 'zh';
   secondaryTargetLanguage.value = config.translationConfig?.secondaryTargetLanguage || 'en';
   enableTriggerButton.checked = config.generalConfig?.enableTriggerButton || false;
+  ignoreLinks.checked = config.generalConfig?.ignoreLinks !== false;
   selectionDelay.value = config.generalConfig?.selectionDelay !== undefined ? config.generalConfig.selectionDelay : 500;
   primaryLangBehavior.value = config.translationConfig?.primaryLangBehavior || 'auto';
 
@@ -220,6 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // 确保通用配置对象存在
       config.generalConfig = config.generalConfig || {};
       config.generalConfig.enableTriggerButton = enableTriggerButton.checked;
+      config.generalConfig.ignoreLinks = ignoreLinks.checked;
       const selectionDelayValue = document.getElementById('selectionDelay').value;
       const selectionDelay = selectionDelayValue !== '' ? parseInt(selectionDelayValue, 10) : 500;
       config.generalConfig.selectionDelay = selectionDelay;
@@ -377,6 +380,7 @@ async function saveConfig(config) {
       const targetLanguage = document.getElementById('targetLanguage').value;
       const secondaryTargetLanguage = document.getElementById('secondaryTargetLanguage').value;
       const enableTriggerButton = document.getElementById('enableTriggerButton').checked;
+      const ignoreLinks = document.getElementById('ignoreLinks').checked;
       const selectionDelayValue = document.getElementById('selectionDelay').value;
       const selectionDelay = selectionDelayValue !== '' ? parseInt(selectionDelayValue, 10) : 500;
       const primaryLangBehavior = document.getElementById('primaryLangBehavior').value;
@@ -411,6 +415,7 @@ async function saveConfig(config) {
         generalConfig: {
           ...config.generalConfig,
           enableTriggerButton: enableTriggerButton,
+          ignoreLinks: ignoreLinks,
           selectionDelay: selectionDelay
         }
       };

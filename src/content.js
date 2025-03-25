@@ -119,7 +119,8 @@ class SelectionHandler {
           },
           generalConfig: {
             enableTriggerButton: false,
-            selectionDelay: 500 // 默认延时500ms
+            selectionDelay: 500, // 默认延时500ms
+            ignoreLinks: true
           }
         };
 
@@ -277,6 +278,12 @@ class SelectionHandler {
   async processSelectedText(selectedText, rect) {
     if (!selectedText) {
       this.isProcessing = false;
+      return;
+    }
+
+    // 检查选中文本是否为链接格式
+    if (this.isLinkFormat(selectedText)) {
+      console.log('NAVI: 选中文本是链接格式，不处理');
       return;
     }
 
@@ -1065,6 +1072,53 @@ class SelectionHandler {
     }, 1500); // 动画持续1.5秒
   }
 
+  // 检查文本是否为链接格式
+  isLinkFormat(text) {
+    // 首先检查是否启用忽略链接功能
+    if (!this.config || !this.config.generalConfig || this.config.generalConfig.ignoreLinks === false) {
+      return false;
+    }
+
+    if (!text) return false;
+
+    // 检查是否是URL (HTTP/HTTPS/FTP等)
+    const urlRegex = /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/i;
+    if (urlRegex.test(text)) {
+      console.log('NAVI: 检测到URL链接格式:', text);
+      return true;
+    }
+
+    // 检查是否是email地址
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
+    if (emailRegex.test(text)) {
+      console.log('NAVI: 检测到电子邮件地址格式:', text);
+      return true;
+    }
+
+    // 检查是否是Windows文件路径
+    const windowsPathRegex = /^[a-zA-Z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]*$/;
+    if (windowsPathRegex.test(text)) {
+      console.log('NAVI: 检测到Windows文件路径格式:', text);
+      return true;
+    }
+
+    // 检查是否是Unix文件路径
+    const unixPathRegex = /^(\/[^\/\0]+)+\/?$/;
+    if (unixPathRegex.test(text)) {
+      console.log('NAVI: 检测到Unix文件路径格式:', text);
+      return true;
+    }
+
+    // 检查是否是IP地址
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/;
+    if (ipRegex.test(text)) {
+      console.log('NAVI: 检测到IP地址格式:', text);
+      return true;
+    }
+
+    return false;
+  }
+
   async handleSelection(event) {
     // 添加拖动状态检查，如果正在拖动则不处理选择事件
     if (this.isDragging) {
@@ -1092,6 +1146,12 @@ class SelectionHandler {
         clearTimeout(this.debounceTimer);
         this.debounceTimer = null;
       }
+      return;
+    }
+
+    // 检查选中文本是否为链接格式
+    if (this.isLinkFormat(selectedText)) {
+      console.log('NAVI: 选中文本是链接格式，不触发划词');
       return;
     }
 

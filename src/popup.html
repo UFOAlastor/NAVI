@@ -268,35 +268,24 @@
 
     .tooltip .tooltip-text {
       visibility: hidden;
-      width: 210px;
+      width: 240px;
       background-color: #555;
       color: #fff;
       text-align: center;
       padding: 6px 8px;
       border-radius: 6px;
-      position: absolute;
-      z-index: 1;
-      bottom: 125%;
+      position: fixed;
+      z-index: 1000;
+      top: 50%;
       left: 50%;
-      margin-left: -110px;
+      transform: translate(-50%, -50%);
       opacity: 0;
       transition: opacity 0.3s;
       font-weight: normal;
-      font-size: 12px;
+      font-size: 14px;
       line-height: 1.4;
       text-align: left;
       box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    }
-
-    .tooltip .tooltip-text::after {
-      content: "";
-      position: absolute;
-      top: 100%;
-      left: 50%;
-      margin-left: -4px;
-      border-width: 4px;
-      border-style: solid;
-      border-color: #555 transparent transparent transparent;
     }
 
     .tooltip:hover .tooltip-text {

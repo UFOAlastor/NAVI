@@ -114,6 +114,8 @@ class OpenAIService extends AIService {
     }
     this.client = new OpenAI(openaiConfig);
     this.model = config.openaiConfig?.model || "gpt-4o-mini";
+    this.baseUrl = config.apiUrls?.openai || 'https://api.openai.com/v1';
+    this.apiKey = config.apiKeys.openai;
   }
 
   // 识别常见OpenAI错误并给出更友好的错误信息
@@ -191,11 +193,10 @@ class OpenAIService extends AIService {
 严格按照以下格式回复, 保持标记完全不变:
 
 <TRANSLATION>
-翻译结果
+
 <DOMAIN>
-领域分类结果
+
 <EXPLANATION>
-一句话概括结果
 
 以下为需要处理的文本:
 ${text}
@@ -418,6 +419,35 @@ ${text}
     }
 
     return result;
+  }
+
+  // 获取可用模型列表
+  async getAvailableModels() {
+    try {
+      console.log(`通过background.js获取OpenAI兼容平台可用模型列表: ${this.baseUrl}`);
+
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          type: "OPENAI_API_REQUEST",
+          action: "LIST_MODELS",
+          baseUrl: this.baseUrl,
+          apiKey: this.apiKey
+        }, response => {
+          if (chrome.runtime.lastError) {
+            return reject(new Error('与背景脚本通信失败: ' + chrome.runtime.lastError.message));
+          }
+
+          if (!response || !response.success) {
+            return reject(new Error(response?.error || '获取模型列表失败，未收到有效响应'));
+          }
+
+          resolve(response.data);
+        });
+      });
+    } catch (error) {
+      console.error('获取OpenAI兼容平台模型列表失败:', error);
+      throw error;
+    }
   }
 }
 

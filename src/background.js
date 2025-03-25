@@ -131,6 +131,22 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     }
   } else if (request.type === "OPEN_OPTIONS") {
     chrome.runtime.openOptionsPage();
+  } else if (request.type === "OPENAI_API_REQUEST") {
+    console.log("接收到模型API请求:", request);
+
+    // 获取OpenAI兼容平台模型列表
+    if (request.action === "LIST_MODELS") {
+      fetchOpenAIModels(request.baseUrl, request.apiKey)
+        .then(models => {
+          console.log("获取到接口平台模型列表:", models);
+          safeSendResponse({ success: true, data: models });
+        })
+        .catch(error => {
+          console.error("获取接口平台模型列表失败:", error);
+          safeSendResponse({ success: false, error: error.message });
+        });
+      return true; // 保持消息通道开放
+    }
   }
 
   return false; // 对于其他消息，不保持消息通道开放
@@ -690,6 +706,91 @@ async function makeOllamaStreamRequest(baseUrl, model, prompt, tabId, onComplete
     }
 
     if (onComplete) onComplete(null);
+    throw error;
+  }
+}
+
+// OpenAI兼容平台模型列表获取函数
+async function fetchOpenAIModels(baseUrl, apiKey) {
+  try {
+    console.log(`尝试获取OpenAI兼容平台模型列表: ${baseUrl}`);
+
+    // 确保baseUrl以/v1结尾
+    const normalizedBaseUrl = baseUrl.endsWith('/v1') ? baseUrl :
+                            baseUrl.endsWith('/') ? baseUrl + 'v1' :
+                            baseUrl + '/v1';
+
+    // 添加请求头信息
+    const requestOptions = {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    };
+
+    const response = await fetch(`${normalizedBaseUrl}/models`, requestOptions);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API错误 (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log("API返回原始模型数据:", data);
+
+    // 处理不同平台可能的数据格式
+    let models = [];
+    if (data.data && Array.isArray(data.data)) {
+      // OpenAI标准格式
+      models = data.data.map(model => ({
+        id: model.id,
+        name: model.id,
+        created: model.created
+      }));
+    } else if (Array.isArray(data)) {
+      // 某些平台可能直接返回模型数组
+      models = data.map(model => ({
+        id: model.id || model.name || model,
+        name: model.id || model.name || model,
+        created: model.created || Date.now()
+      }));
+    } else if (data.models && Array.isArray(data.models)) {
+      // 某些平台可能使用models字段
+      models = data.models.map(model => ({
+        id: model.id || model.name || model,
+        name: model.id || model.name || model,
+        created: model.created || Date.now()
+      }));
+    }
+
+    // 过滤掉嵌入模型，只保留对话模型
+    const chatModels = models.filter(model => {
+      const modelName = model.name.toLowerCase();
+      return !modelName.includes('embed') &&
+             !modelName.includes('embedding') &&
+             !modelName.includes('clip') &&
+             !modelName.includes('text-embedding');
+    });
+
+    // 按创建时间倒序排序
+    chatModels.sort((a, b) => (b.created || 0) - (a.created || 0));
+
+    console.log("过滤后的对话模型:", chatModels);
+    return chatModels;
+  } catch (error) {
+    console.error("获取OpenAI兼容平台模型列表错误:", error);
+
+    if (error.message.includes('Failed to fetch') ||
+        error.message.includes('NetworkError')) {
+      throw new Error(
+        `无法连接到API服务 (${baseUrl})。请确保:\n` +
+        `1. API服务地址正确\n` +
+        `2. 网络连接正常\n` +
+        `3. API Key正确`
+      );
+    }
+
     throw error;
   }
 }

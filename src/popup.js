@@ -83,6 +83,51 @@ document.addEventListener('DOMContentLoaded', async () => {
   selectionDelay.value = config.generalConfig?.selectionDelay !== undefined ? config.generalConfig.selectionDelay : 500;
   primaryLangBehavior.value = config.translationConfig?.primaryLangBehavior || 'auto';
 
+  // 添加对baseUrl输入框的变化监听
+  if (openaiBaseUrl) {
+    let baseUrlDebounceTimer;
+    openaiBaseUrl.addEventListener('input', () => {
+      // 使用防抖处理，避免频繁请求
+      clearTimeout(baseUrlDebounceTimer);
+      baseUrlDebounceTimer = setTimeout(() => {
+        // 只有当输入框有值且不为空时才触发刷新
+        if (openaiBaseUrl.value.trim() && openaiKey.value.trim()) {
+          fetchOpenAIModels();
+        }
+      }, 500); // 500ms的防抖延迟
+    });
+  }
+
+  // 添加对API Key输入框的变化监听
+  if (openaiKey) {
+    let apiKeyDebounceTimer;
+    openaiKey.addEventListener('input', () => {
+      // 使用防抖处理，避免频繁请求
+      clearTimeout(apiKeyDebounceTimer);
+      apiKeyDebounceTimer = setTimeout(() => {
+        // 只有当输入框有值且不为空时才触发刷新
+        if (openaiKey.value.trim() && openaiBaseUrl.value.trim()) {
+          fetchOpenAIModels();
+        }
+      }, 500); // 500ms的防抖延迟
+    });
+  }
+
+  // 添加对Ollama URL输入框的变化监听
+  if (ollamaUrl) {
+    let ollamaUrlDebounceTimer;
+    ollamaUrl.addEventListener('input', () => {
+      // 使用防抖处理，避免频繁请求
+      clearTimeout(ollamaUrlDebounceTimer);
+      ollamaUrlDebounceTimer = setTimeout(() => {
+        // 只有当输入框有值且不为空时才触发刷新
+        if (ollamaUrl.value.trim()) {
+          fetchOllamaModels();
+        }
+      }, 500); // 500ms的防抖延迟
+    });
+  }
+
   // 初始时根据触发按钮状态显示或隐藏延时设置
   toggleSelectionDelayVisibility(enableTriggerButton.checked);
 
@@ -580,6 +625,9 @@ function updateServiceSettings(service) {
   } else if (service === 'openai') {
     ollamaSection.style.display = 'none';
     openaiSection.style.display = 'block';
+
+    // 添加加载OpenAI兼容平台模型列表的逻辑
+    fetchOpenAIModels();
   }
 }
 
@@ -847,3 +895,130 @@ function showOllamaCorsHint(isError = false) {
     }
   });
 })();
+
+// 修改获取OpenAI兼容平台模型列表的函数
+async function fetchOpenAIModels() {
+  try {
+    // 直接从输入框获取当前值
+    const openaiKey = document.getElementById('openaiKey');
+    const openaiBaseUrl = document.getElementById('openaiBaseUrl');
+
+    if (!openaiKey || !openaiBaseUrl) {
+      console.error("无法找到必要的输入元素");
+      return;
+    }
+
+    const apiKey = openaiKey.value.trim();
+    const baseUrl = openaiBaseUrl.value.trim() || 'https://api.openai.com/v1';
+
+    // 如果没有API Key，不进行请求
+    if (!apiKey) {
+      console.log('未输入OpenAI API Key，跳过获取模型列表');
+      return;
+    }
+
+    // 显示一个正在加载的提示
+    const modelSelect = document.getElementById('openaiModel');
+    if (!modelSelect) {
+      console.error("无法找到openaiModel元素");
+      showStatus('无法加载模型列表: 界面加载错误', 'error');
+      return;
+    }
+
+    modelSelect.innerHTML = '<option value="">正在加载模型列表...</option>';
+    modelSelect.disabled = true;
+
+    showStatus('正在获取模型列表...', 'info');
+
+    // 通过background.js获取模型列表
+    chrome.runtime.sendMessage({
+      type: "OPENAI_API_REQUEST",
+      action: "LIST_MODELS",
+      baseUrl: baseUrl,
+      apiKey: apiKey
+    }, response => {
+      if (!modelSelect) {
+        console.error("响应处理时openaiModel元素不存在");
+        return;
+      }
+
+      if (chrome.runtime.lastError) {
+        console.error('获取模型列表失败:', chrome.runtime.lastError);
+        modelSelect.innerHTML = '<option value="">获取模型列表失败</option>';
+        modelSelect.disabled = false;
+        showStatus('无法连接到服务器，请检查网络设置', 'error');
+        return;
+      }
+
+      if (!response || !response.success) {
+        console.error('获取模型列表失败:', response?.error);
+        modelSelect.innerHTML = '<option value="">获取模型列表失败</option>';
+        modelSelect.disabled = false;
+
+        // 优化错误提示
+        let userMessage = '获取模型列表失败';
+        const errorMsg = response?.error?.toLowerCase() || '';
+
+        if (errorMsg.includes('401') || errorMsg.includes('invalid')) {
+          userMessage = 'API密钥无效，请检查后重试';
+        } else if (errorMsg.includes('403')) {
+          userMessage = 'API密钥无权限，请检查账户状态';
+        } else if (errorMsg.includes('429')) {
+          userMessage = '请求过于频繁，请稍后重试';
+        } else if (errorMsg.includes('timeout')) {
+          userMessage = '服务器响应超时，请稍后重试';
+        } else if (errorMsg.includes('network') || errorMsg.includes('failed to fetch')) {
+          userMessage = '网络连接失败，请检查网络设置';
+        }
+
+        showStatus(userMessage, 'error');
+        return;
+      }
+
+      const models = response.data;
+      // 从配置中获取当前选中的模型
+      loadConfig().then(config => {
+        renderOpenAIModelOptions(models, config.openaiConfig?.model || '');
+      });
+      showStatus(`已获取到${models.length}个可用模型`, 'success');
+    });
+  } catch (error) {
+    console.error('获取模型列表出错:', error);
+    showStatus('获取模型列表失败，请稍后重试', 'error');
+  }
+}
+
+// 渲染OpenAI模型选项
+function renderOpenAIModelOptions(models, currentModel) {
+  const modelSelect = document.getElementById('openaiModel');
+  if (!modelSelect) {
+    console.error("无法找到openaiModel元素，无法渲染模型选项");
+    return;
+  }
+
+  modelSelect.innerHTML = '';
+
+  if (!models || models.length === 0) {
+    modelSelect.innerHTML = '<option value="">未找到可用模型</option>';
+    modelSelect.disabled = true;
+    return;
+  }
+
+  // 添加模型选项
+  models.forEach(model => {
+    const option = document.createElement('option');
+    option.value = model.id;
+    option.textContent = model.name;
+    modelSelect.appendChild(option);
+  });
+
+  // 设置当前选择的模型
+  if (currentModel && modelSelect.querySelector(`option[value="${currentModel}"]`)) {
+    modelSelect.value = currentModel;
+  } else if (models.length > 0) {
+    // 如果当前模型不存在于列表中，选择第一个
+    modelSelect.value = models[0].id;
+  }
+
+  modelSelect.disabled = false;
+}

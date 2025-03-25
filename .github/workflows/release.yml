@@ -25,6 +25,13 @@ jobs:
       - name: Build extension
         run: npm run build
 
+      - name: Package Extension
+        run: |
+          if [ ! -d "dist" ]; then
+            mkdir dist
+          fi
+          cd dist && zip -r navi-extension.zip ./*
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -42,6 +49,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./dist/
+          asset_path: ./dist/navi-extension.zip
           asset_name: navi-extension-${{ github.ref_name }}.zip
           asset_content_type: application/zip

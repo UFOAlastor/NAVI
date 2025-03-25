@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "NAVI - Smart Text Selection Assistant",
+    "description": "Extension name"
+  },
+  "extensionDescription": {
+    "message": "Intelligent text selection translation and explanation tool supporting multiple AI platforms and local models",
+    "description": "Extension description"
+  }
+}

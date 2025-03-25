@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "NAVI - 智能文本选择助手",
+    "description": "扩展名称"
+  },
+  "extensionDescription": {
+    "message": "支持多种AI平台和本地模型的智能文本选择翻译和解释工具",
+    "description": "扩展描述"
+  }
+}

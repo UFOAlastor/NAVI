@@ -39,7 +39,8 @@ module.exports = {
         { from: 'src/content.css', to: 'content.css' },
         { from: 'src/offscreen.html', to: 'offscreen.html' },
         { from: 'src/troubleshooting.html', to: 'troubleshooting.html' },
-        { from: 'icons', to: 'icons' }
+        { from: 'icons', to: 'icons' },
+        { from: '_locales', to: '_locales' }
       ]
     })
   ]

@@ -1144,6 +1144,15 @@ class SelectionHandler {
 
     console.log('NAVI: 划词事件被触发');
 
+    // 获取划词起点元素
+    if (event && event.clientX && event.clientY) {
+      const startElement = document.elementFromPoint(event.clientX, event.clientY);
+      if (startElement && this.isInputElement(startElement)) {
+        console.log('NAVI: 划词起点在输入框内，不处理');
+        return;
+      }
+    }
+
     const selection = window.getSelection();
     const selectedText = selection.toString().trim();
 
@@ -1170,9 +1179,23 @@ class SelectionHandler {
     const targetElement = event.target;
     console.log('NAVI: 事件目标元素:', targetElement);
 
-    // 优先检查事件目标元素是否为输入元素
-    if (this.isInputElement(targetElement)) {
-      console.log('NAVI: 选中文本在输入框中(事件目标)，不触发划词', targetElement);
+    // 检查选区是否包含输入框元素
+    const range = selection.getRangeAt(0);
+    const walker = document.createTreeWalker(
+      range.commonAncestorContainer,
+      NodeFilter.SHOW_ELEMENT,
+      {
+        acceptNode: (node) => {
+          return this.isInputElement(node) ?
+            NodeFilter.FILTER_ACCEPT :
+            NodeFilter.FILTER_SKIP;
+        }
+      }
+    );
+
+    // 如果找到任何输入元素，则不处理
+    if (walker.nextNode()) {
+      console.log('NAVI: 选区包含输入框元素，不触发划词');
       return;
     }
 
@@ -1183,7 +1206,6 @@ class SelectionHandler {
     }
 
     // 获取选中文本的位置
-    const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
 
     // 检查是否在插件结果框中
@@ -1194,6 +1216,15 @@ class SelectionHandler {
     if (element.closest('.navi-popup') || element.closest('.navi-result') || element.closest('.navi-trigger-button')) {
       console.log('NAVI: 选中文本在插件结果框中，不触发划词');
       return;
+    }
+
+    // 检查选区是否包含输入框元素
+    const rangeNodes = range.cloneContents().querySelectorAll('*');
+    for (const node of rangeNodes) {
+      if (this.isInputElement(node)) {
+        console.log('NAVI: 选区包含输入框元素，不触发划词');
+        return;
+      }
     }
 
     console.log('NAVI: 选中文本的位置:', rect);

@@ -421,7 +421,7 @@
       <div class="header-left">
         <img src="../icons/icon128.png" alt="NAVI">
         <h1 data-i18n="settings">NAVI 设置</h1>
-        <span class="version-number">v1.1.4</span> <!-- ATTENTION 注意同步更新版本号 -->
+        <span class="version-number"></span>
       </div>
       <select id="uiLanguage">
         <option value="zh" data-i18n="zh_lang">中文 (简体)</option>
@@ -431,23 +431,29 @@
 
     <div class="section">
       <div class="section-title" data-i18n="generalSettings">通用设置</div>
-      <div class="option-row">
-        <div style="display: flex; width: 100%; justify-content: flex-start;">
-          <div style="display: flex; align-items: center;">
-            <label for="enableTriggerButton" data-i18n="enableTriggerButton">触发按钮</label>
-            <input type="checkbox" id="enableTriggerButton">
-            <div class="tooltip">
-              <div class="tooltip-icon"></div>
-              <span class="tooltip-text" data-i18n="triggerButtonDescription">启用后，划词不会立即触发解释，而是显示触发按钮</span>
-            </div>
+      <div style="display: grid; width: 100%; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div style="display: flex; align-items: center;">
+          <label for="enableTriggerButton" data-i18n="enableTriggerButton">触发按钮</label>
+          <input type="checkbox" id="enableTriggerButton">
+          <div class="tooltip">
+            <div class="tooltip-icon"></div>
+            <span class="tooltip-text" data-i18n="triggerButtonDescription">启用后，划词不会立即触发解释，而是显示触发按钮</span>
           </div>
-          <div style="display: flex; align-items: center; margin-left: 40px;">
-            <label for="ignoreLinks" data-i18n="ignoreLinks">忽略链接</label>
-            <input type="checkbox" id="ignoreLinks" checked>
-            <div class="tooltip">
-              <div class="tooltip-icon"></div>
-              <span class="tooltip-text" data-i18n="ignoreLinksDescription">启用后，划选URL、邮箱、路径等格式时不触发解释</span>
-            </div>
+        </div>
+        <div style="display: flex; align-items: center;">
+          <label for="ignoreLinks" data-i18n="ignoreLinks">忽略链接</label>
+          <input type="checkbox" id="ignoreLinks" checked>
+          <div class="tooltip">
+            <div class="tooltip-icon"></div>
+            <span class="tooltip-text" data-i18n="ignoreLinksDescription">启用后，划选URL、邮箱、路径等格式时不触发解释</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center;">
+          <label for="showDomain" data-i18n="showDomain">显示领域</label>
+          <input type="checkbox" id="showDomain" checked>
+          <div class="tooltip">
+            <div class="tooltip-icon"></div>
+            <span class="tooltip-text" data-i18n="showDomainDescription">启用后，AI回答中将包含对文本所属专业领域的分析</span>
           </div>
         </div>
       </div>

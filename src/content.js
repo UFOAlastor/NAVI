@@ -842,8 +842,15 @@ class SelectionHandler {
       <div class="navi-draggable-area"></div>
       <div class="navi-result">
         <div class="navi-meta">
-          <div class="navi-translation"><strong>${uiText.translation}:</strong> ${translation}</div>
-          <div class="navi-domain"><strong>${uiText.domain}:</strong> ${domain}</div>
+          <div class="navi-translation"><strong>${uiText.translation}:</strong> ${translation}</div>`;
+
+    // 只有当showDomain未明确设置为false时才显示领域信息
+    if (config.generalConfig?.showDomain !== false) {
+      resultHTML += `
+          <div class="navi-domain"><strong>${uiText.domain}:</strong> ${domain}</div>`;
+    }
+
+    resultHTML += `
           <div class="navi-explanation"><strong>${uiText.explanation}:</strong> ${explanation}</div>
         </div>
       </div>

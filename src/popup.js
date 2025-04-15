@@ -1,5 +1,6 @@
 // 导入i18n模块
 import i18n from './utils/i18n.js';
+import { getVersion } from './utils/version.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('DOM加载完成，开始初始化...');
@@ -9,6 +10,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 应用当前语言
   applyLanguage(i18n.getCurrentLanguage());
+
+  // 更新版本号
+  const versionElement = document.querySelector('.version-number');
+  if (versionElement) {
+    const version = getVersion();
+    versionElement.textContent = `v${version}`;
+  }
 
   // 清除可能存在的旧状态消息
   const statusElement = document.getElementById('status');
@@ -32,14 +40,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   const uiLanguage = document.getElementById('uiLanguage');
   const enableTriggerButton = document.getElementById('enableTriggerButton');
   const ignoreLinks = document.getElementById('ignoreLinks');
+  const showDomain = document.getElementById('showDomain');
   const selectionDelay = document.getElementById('selectionDelay');
   const selectionDelayContainer = document.getElementById('selectionDelayContainer');
   const primaryLangBehavior = document.getElementById('primaryLangBehavior');
 
   // 检查是否所有必需元素都存在
-  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !secondaryTargetLanguage || !uiLanguage || !enableTriggerButton || !ignoreLinks || !selectionDelay || !selectionDelayContainer || !primaryLangBehavior) {
+  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !secondaryTargetLanguage || !uiLanguage || !enableTriggerButton || !ignoreLinks || !showDomain || !selectionDelay || !selectionDelayContainer || !primaryLangBehavior) {
     console.error('某些DOM元素未找到:', {
-      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, secondaryTargetLanguage, uiLanguage, enableTriggerButton, ignoreLinks, selectionDelay, selectionDelayContainer, primaryLangBehavior
+      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, secondaryTargetLanguage, uiLanguage, enableTriggerButton, ignoreLinks, showDomain, selectionDelay, selectionDelayContainer, primaryLangBehavior
     });
     showStatus(i18n.t('interfaceLoadError'), 'error');
     return;
@@ -80,6 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   secondaryTargetLanguage.value = config.translationConfig?.secondaryTargetLanguage || 'en';
   enableTriggerButton.checked = config.generalConfig?.enableTriggerButton || false;
   ignoreLinks.checked = config.generalConfig?.ignoreLinks !== false;
+  showDomain.checked = config.generalConfig?.showDomain !== false;
   selectionDelay.value = config.generalConfig?.selectionDelay !== undefined ? config.generalConfig.selectionDelay : 500;
   primaryLangBehavior.value = config.translationConfig?.primaryLangBehavior || 'auto';
 
@@ -268,6 +278,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       config.generalConfig = config.generalConfig || {};
       config.generalConfig.enableTriggerButton = enableTriggerButton.checked;
       config.generalConfig.ignoreLinks = ignoreLinks.checked;
+      config.generalConfig.showDomain = showDomain.checked;
       const selectionDelayValue = document.getElementById('selectionDelay').value;
       const selectionDelay = selectionDelayValue !== '' ? parseInt(selectionDelayValue, 10) : 500;
       config.generalConfig.selectionDelay = selectionDelay;
@@ -365,7 +376,8 @@ async function loadConfig() {
             model: 'qwen2.5:7b'
           },
           generalConfig: {
-            enableTriggerButton: false
+            enableTriggerButton: false,
+            showDomain: true
           }
         };
 
@@ -405,7 +417,8 @@ async function loadConfig() {
           model: 'qwen2.5:7b'
         },
         generalConfig: {
-          enableTriggerButton: false
+          enableTriggerButton: false,
+          showDomain: true
         }
       });
     }
@@ -426,6 +439,7 @@ async function saveConfig(config) {
       const secondaryTargetLanguage = document.getElementById('secondaryTargetLanguage').value;
       const enableTriggerButton = document.getElementById('enableTriggerButton').checked;
       const ignoreLinks = document.getElementById('ignoreLinks').checked;
+      const showDomain = document.getElementById('showDomain').checked;
       const selectionDelayValue = document.getElementById('selectionDelay').value;
       const selectionDelay = selectionDelayValue !== '' ? parseInt(selectionDelayValue, 10) : 500;
       const primaryLangBehavior = document.getElementById('primaryLangBehavior').value;
@@ -461,6 +475,7 @@ async function saveConfig(config) {
           ...config.generalConfig,
           enableTriggerButton: enableTriggerButton,
           ignoreLinks: ignoreLinks,
+          showDomain: showDomain,
           selectionDelay: selectionDelay
         }
       };

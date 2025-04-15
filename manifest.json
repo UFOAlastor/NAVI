@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "zh",
   "name": "NAVI - Smart Text Selection Assistant",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Intelligent text selection translation and explanation tool supporting multiple AI platforms and local models",
   "permissions": [
     "storage",
@@ -51,7 +51,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["utils/i18n.js", "icons/*.png"],
+      "resources": ["utils/i18n.js", "icons/*.png", "package.json"],
       "matches": ["<all_urls>"]
     }
   ]

@@ -184,19 +184,34 @@ class OpenAIService extends AIService {
         timestamp: Date.now()
       };
 
+      secondaryTargetLang = secondaryTargetLang || 'en';
+
       // 准备智能提示，根据主选和次选语言动态调整
-      const prompt = `你是一个专业的翻译和分析助手, 请完成以下三项任务:
+      let prompt = `你是一个专业的翻译和分析助手, 请完成以下任务:
 1. 翻译文本, 若文本已经是${targetLang}语言则翻译成${secondaryTargetLang}语言, 否则翻译成${targetLang}语言.
-2. 分析专业领域, 始终使用${targetLang}语言回复.
-3. 提供简短易懂的解释, 始终使用${targetLang}语言回复.
+`;
+
+      // 如果启用了显示领域，则添加领域分析任务
+      if (this.config?.generalConfig?.showDomain !== false) {
+        prompt += `2. 分析专业领域, 始终使用${targetLang}语言回复.
+`;
+      }
+
+      prompt += `${this.config?.generalConfig?.showDomain !== false ? '3' : '2'}. 提供简短易懂的解释, 始终使用${targetLang}语言回复.
 
 严格按照以下格式回复, 保持标记完全不变:
 
 <TRANSLATION>
 
-<DOMAIN>
+`;
 
-<EXPLANATION>
+      if (this.config?.generalConfig?.showDomain !== false) {
+        prompt += `<DOMAIN>
+
+`;
+      }
+
+      prompt += `<EXPLANATION>
 
 以下为需要处理的文本:
 ${text}
@@ -636,18 +651,31 @@ class OllamaService extends AIService {
     return this.withCache('translate', text, { targetLang, secondaryTargetLang }, async () => {
       try {
         // 准备智能提示，根据主选和次选语言动态调整
-        const prompt = `你是一个专业的翻译和分析助手, 请完成以下三项任务:
+        let prompt = `你是一个专业的翻译和分析助手, 请完成以下任务:
 1. 翻译文本, 若文本已经是${targetLang}语言则翻译成${secondaryTargetLang}语言, 否则翻译成${targetLang}语言.
-2. 分析专业领域, 始终使用${targetLang}语言回复.
-3. 提供简短易懂的解释, 始终使用${targetLang}语言回复.
+`;
+
+        // 如果启用了显示领域，则添加领域分析任务
+        if (this.config?.generalConfig?.showDomain !== false) {
+          prompt += `2. 分析专业领域, 始终使用${targetLang}语言回复.
+`;
+        }
+
+        prompt += `${this.config?.generalConfig?.showDomain !== false ? '3' : '2'}. 提供简短易懂的解释, 始终使用${targetLang}语言回复.
 
 严格按照以下格式回复, 保持标记完全不变:
 
 <TRANSLATION>
 
-<DOMAIN>
+`;
 
-<EXPLANATION>
+        if (this.config?.generalConfig?.showDomain !== false) {
+          prompt += `<DOMAIN>
+
+`;
+        }
+
+        prompt += `<EXPLANATION>
 
 以下为需要处理的文本:
 ${text}

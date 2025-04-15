@@ -1,5 +1,7 @@
 const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
+const webpack = require('webpack');
+const packageJson = require('./package.json');
 
 module.exports = {
   entry: {
@@ -32,6 +34,9 @@ module.exports = {
     ]
   },
   plugins: [
+    new webpack.DefinePlugin({
+      'process.env.VERSION': JSON.stringify(packageJson.version)
+    }),
     new CopyPlugin({
       patterns: [
         { from: 'manifest.json', to: 'manifest.json' },

@@ -989,8 +989,9 @@ class SelectionHandler {
       return true;
     }
 
-    // 获取元素的类名和ID
-    const classNames = el.className ? el.className.toLowerCase() : '';
+    // 获取元素的类名和ID，确保类名是字符串类型
+    const classNames = (typeof el.className === 'string' ? el.className :
+                      el.className && el.className.baseVal ? el.className.baseVal : '').toLowerCase();
     const idName = el.id ? el.id.toLowerCase() : '';
 
     // 显式排除标题和弹出框元素

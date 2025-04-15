@@ -2,6 +2,13 @@ const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
 const webpack = require('webpack');
 const packageJson = require('./package.json');
+const fs = require('fs');
+
+// 读取manifest.json并更新版本号
+const manifestPath = path.resolve(__dirname, 'manifest.json');
+const manifest = require(manifestPath);
+manifest.version = packageJson.version;
+fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
 module.exports = {
   entry: {

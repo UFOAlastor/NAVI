@@ -187,7 +187,17 @@ class OpenAIService extends AIService {
       secondaryTargetLang = secondaryTargetLang || 'en';
 
       // 准备智能提示，根据主选和次选语言动态调整
-      let prompt = `你是一个专业的翻译和分析助手, 请完成以下任务:
+      let prompt = "";
+
+      // 检查模型是否为Qwen3系列，并根据思考模式设置添加/no_think标记
+      const isQwen3Model = this.model.toLowerCase().includes('qwen3');
+      const shouldDisableThinking = isQwen3Model && this.config?.generalConfig?.enableThinkMode !== true;
+
+      if (shouldDisableThinking) {
+        prompt += `/no_think\n`;
+      }
+
+      prompt += `你是一个专业的翻译和分析助手, 请完成以下任务:
 1. 翻译文本, 若文本已经是${targetLang}语言则翻译成${secondaryTargetLang}语言, 否则翻译成${targetLang}语言.
 `;
 
@@ -651,7 +661,17 @@ class OllamaService extends AIService {
     return this.withCache('translate', text, { targetLang, secondaryTargetLang }, async () => {
       try {
         // 准备智能提示，根据主选和次选语言动态调整
-        let prompt = `你是一个专业的翻译和分析助手, 请完成以下任务:
+        let prompt = "";
+
+        // 检查模型是否为Qwen3系列，并根据思考模式设置添加/no_think标记
+        const isQwen3Model = this.model.toLowerCase().includes('qwen3');
+        const shouldDisableThinking = isQwen3Model && this.config?.generalConfig?.enableThinkMode !== true;
+
+        if (shouldDisableThinking) {
+          prompt += `/no_think\n`;
+        }
+
+        prompt += `你是一个专业的翻译和分析助手, 请完成以下任务:
 1. 翻译文本, 若文本已经是${targetLang}语言则翻译成${secondaryTargetLang}语言, 否则翻译成${targetLang}语言.
 `;
 
@@ -840,7 +860,17 @@ ${text}
   async explainStream(text, onChunk, onComplete) {
     return this.withCache('explain', text, {}, async () => {
       try {
-        const prompt = `请对以下文本进行一句话简短解释，确保通俗易懂，让外行人士也能理解。禁止长篇大论，禁止分点分段，只能用一句话概括：\n${text}`;
+        // 检查模型是否为Qwen3系列，并根据思考模式设置添加/no_think标记
+        let prompt = "";
+
+        const isQwen3Model = this.model.toLowerCase().includes('qwen3');
+        const shouldDisableThinking = isQwen3Model && this.config?.generalConfig?.enableThinkMode !== true;
+
+        if (shouldDisableThinking) {
+          prompt += `/no_think\n`;
+        }
+
+        prompt += `请对以下文本进行一句话简短解释，确保通俗易懂，让外行人士也能理解。禁止长篇大论，禁止分点分段，只能用一句话概括：\n${text}`;
 
         let resultObj = {
           explanation: "",

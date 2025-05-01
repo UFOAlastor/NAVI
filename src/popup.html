@@ -561,6 +561,16 @@
           <option value="" data-i18n="selectModel">选择模型...</option>
         </select>
       </div>
+      <div class="form-group" id="thinkModeContainer" style="display: none;">
+        <div style="display: flex; align-items: center;">
+          <label for="enableThinkMode" data-i18n="enableThinkMode">启用思考模式</label>
+          <input type="checkbox" id="enableThinkMode">
+          <div class="tooltip">
+            <div class="tooltip-icon"></div>
+            <span class="tooltip-text" data-i18n="thinkModeDescription">启用后，模型将展示思考过程。关闭可提高响应速度。</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <button class="save-button" id="saveButton" data-i18n="saveSettings">保存设置</button>

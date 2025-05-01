@@ -44,11 +44,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const selectionDelay = document.getElementById('selectionDelay');
   const selectionDelayContainer = document.getElementById('selectionDelayContainer');
   const primaryLangBehavior = document.getElementById('primaryLangBehavior');
+  const thinkModeContainer = document.getElementById('thinkModeContainer');
+  const enableThinkMode = document.getElementById('enableThinkMode');
+
+  console.log('思考模式相关元素:', {
+    thinkModeContainer: thinkModeContainer ? 'found' : 'not found',
+    enableThinkMode: enableThinkMode ? 'found' : 'not found',
+    thinkModeDisplayStyle: thinkModeContainer ? thinkModeContainer.style.display : 'n/a'
+  });
 
   // 检查是否所有必需元素都存在
-  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !secondaryTargetLanguage || !uiLanguage || !enableTriggerButton || !ignoreLinks || !showDomain || !selectionDelay || !selectionDelayContainer || !primaryLangBehavior) {
+  if (!defaultService || !openaiKey || !openaiModel || !ollamaUrl || !ollamaModel || !saveButton || !status || !targetLanguage || !secondaryTargetLanguage || !uiLanguage || !enableTriggerButton || !ignoreLinks || !showDomain || !selectionDelay || !selectionDelayContainer || !primaryLangBehavior || !thinkModeContainer || !enableThinkMode) {
     console.error('某些DOM元素未找到:', {
-      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, secondaryTargetLanguage, uiLanguage, enableTriggerButton, ignoreLinks, showDomain, selectionDelay, selectionDelayContainer, primaryLangBehavior
+      defaultService, openaiKey, openaiModel, ollamaUrl, ollamaModel, saveButton, status, targetLanguage, secondaryTargetLanguage, uiLanguage, enableTriggerButton, ignoreLinks, showDomain, selectionDelay, selectionDelayContainer, primaryLangBehavior, thinkModeContainer, enableThinkMode
     });
     showStatus(i18n.t('interfaceLoadError'), 'error');
     return;
@@ -92,6 +100,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   showDomain.checked = config.generalConfig?.showDomain !== false;
   selectionDelay.value = config.generalConfig?.selectionDelay !== undefined ? config.generalConfig.selectionDelay : 500;
   primaryLangBehavior.value = config.translationConfig?.primaryLangBehavior || 'auto';
+  enableThinkMode.checked = config.generalConfig?.enableThinkMode || false;
+
+  // 确保thinkModeContainer被正确位置放置
+  const currentService = defaultService.value;
+  if (currentService === 'openai') {
+    if (openaiSection && thinkModeContainer && thinkModeContainer.parentElement !== openaiSection) {
+      console.log('将思考模式容器移动到OpenAI设置区域');
+      openaiSection.appendChild(thinkModeContainer);
+    }
+  } else if (currentService === 'ollama') {
+    if (ollamaSection && thinkModeContainer && thinkModeContainer.parentElement !== ollamaSection) {
+      console.log('将思考模式容器移动到Ollama设置区域');
+      ollamaSection.appendChild(thinkModeContainer);
+    }
+  }
+
+  // 检查是否显示思考模式选项
+  if (currentService === 'openai') {
+    checkThinkModeVisibility(openaiModel.value);
+  } else if (currentService === 'ollama') {
+    checkThinkModeVisibility(ollamaModel.value);
+  }
 
   // 添加对baseUrl输入框的变化监听
   if (openaiBaseUrl) {
@@ -282,6 +312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const selectionDelayValue = document.getElementById('selectionDelay').value;
       const selectionDelay = selectionDelayValue !== '' ? parseInt(selectionDelayValue, 10) : 500;
       config.generalConfig.selectionDelay = selectionDelay;
+      config.generalConfig.enableThinkMode = enableThinkMode.checked;
 
       // 保存配置
       await saveConfig(config);
@@ -331,6 +362,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 始终尝试获取Ollama模型列表，不管当前选择的服务类型
   fetchOllamaModels();
+
+  // 添加模型变更监听器
+  if (ollamaModel) {
+    ollamaModel.addEventListener('change', function(event) {
+      console.log('Ollama模型变更事件触发:', event.target.value);
+      checkThinkModeVisibility(event.target.value);
+    });
+  }
+
+  // 为OpenAI模型添加变更监听器
+  if (openaiModel) {
+    openaiModel.addEventListener('change', function(event) {
+      console.log('OpenAI模型变更事件触发:', event.target.value);
+      checkThinkModeVisibility(event.target.value);
+    });
+  }
+
+  // 初始检查
+  if (ollamaModel && ollamaModel.value) {
+    console.log('初始化检查思考模式可见性 (Ollama):', ollamaModel.value);
+    checkThinkModeVisibility(ollamaModel.value);
+  }
+
+  // 初始检查OpenAI模型
+  if (openaiModel && openaiModel.value) {
+    console.log('初始化检查思考模式可见性 (OpenAI):', openaiModel.value);
+    checkThinkModeVisibility(openaiModel.value);
+  }
 });
 
 // 应用语言到界面
@@ -443,6 +502,7 @@ async function saveConfig(config) {
       const selectionDelayValue = document.getElementById('selectionDelay').value;
       const selectionDelay = selectionDelayValue !== '' ? parseInt(selectionDelayValue, 10) : 500;
       const primaryLangBehavior = document.getElementById('primaryLangBehavior').value;
+      const enableThinkMode = document.getElementById('enableThinkMode').checked;
 
       // 整合配置
       const updatedConfig = {
@@ -476,7 +536,8 @@ async function saveConfig(config) {
           enableTriggerButton: enableTriggerButton,
           ignoreLinks: ignoreLinks,
           showDomain: showDomain,
-          selectionDelay: selectionDelay
+          selectionDelay: selectionDelay,
+          enableThinkMode: enableThinkMode
         }
       };
 
@@ -617,18 +678,43 @@ function updateServiceSettings(service) {
     return;
   }
 
+  // 获取思考模式容器元素
+  const thinkModeContainer = document.getElementById('thinkModeContainer');
+  if (thinkModeContainer) {
+    // 先移动思考模式容器到当前活动的服务设置区域
+    if (service === 'ollama') {
+      ollamaSection.appendChild(thinkModeContainer);
+    } else if (service === 'openai') {
+      openaiSection.appendChild(thinkModeContainer);
+    }
+  }
+
   if (service === 'ollama') {
     ollamaSection.style.display = 'block';
     openaiSection.style.display = 'none';
 
     // 添加加载Ollama模型列表的逻辑
     fetchOllamaModels();
+
+    // 检查思考模式选项的可见性
+    const ollamaModel = document.getElementById('ollamaModel');
+    if (ollamaModel && ollamaModel.value) {
+      console.log('Ollama服务: 检查模型:', ollamaModel.value);
+      checkThinkModeVisibility(ollamaModel.value);
+    }
   } else if (service === 'openai') {
     ollamaSection.style.display = 'none';
     openaiSection.style.display = 'block';
 
     // 添加加载OpenAI兼容平台模型列表的逻辑
     fetchOpenAIModels();
+
+    // 检查思考模式选项的可见性
+    const openaiModel = document.getElementById('openaiModel');
+    if (openaiModel && openaiModel.value) {
+      console.log('OpenAI服务: 检查模型:', openaiModel.value);
+      checkThinkModeVisibility(openaiModel.value);
+    }
   }
 }
 
@@ -757,6 +843,10 @@ function renderOllamaModelOptions(models, currentModel) {
   }
 
   modelSelect.disabled = false;
+
+  // 在设置完模型后，立即检查思考模式的可见性
+  console.log('在renderOllamaModelOptions中设置模型值后:', modelSelect.value);
+  checkThinkModeVisibility(modelSelect.value);
 }
 
 // 更新Ollama模型设置
@@ -1022,4 +1112,54 @@ function renderOpenAIModelOptions(models, currentModel) {
   }
 
   modelSelect.disabled = false;
+
+  // 在设置完模型后，立即检查思考模式的可见性
+  console.log('在renderOpenAIModelOptions中设置模型值后:', modelSelect.value);
+  checkThinkModeVisibility(modelSelect.value);
+}
+
+// 添加检查思考模式可见性的函数
+function checkThinkModeVisibility(modelName) {
+  const thinkModeContainer = document.getElementById('thinkModeContainer');
+
+  if (!thinkModeContainer || !modelName) {
+    console.log('思考模式容器不存在或模型名为空:', {
+      containerExists: !!thinkModeContainer,
+      modelName: modelName
+    });
+    return;
+  }
+
+  // 移除现有的内联样式，确保DOM结构完整
+  thinkModeContainer.removeAttribute('style');
+
+  // 改进判断逻辑，处理可能包含斜杠的模型名
+  const modelNameLower = modelName.toLowerCase();
+
+  // 检查各种可能的匹配条件
+  const hasQwen3 = modelNameLower.includes('qwen3');
+  const hasQwenSlashQwen3 = modelNameLower.includes('qwen/qwen3');
+
+  // 检查是否包含qwen3，同时处理斜杠格式
+  const isQwen3Model = hasQwen3 || hasQwenSlashQwen3;
+
+  console.log('检查思考模式可见性详情:', {
+    modelName: modelName,
+    modelNameLower: modelNameLower,
+    hasQwen3: hasQwen3,
+    hasQwenSlashQwen3: hasQwenSlashQwen3,
+    isQwen3Model: isQwen3Model,
+    container: thinkModeContainer,
+    containerParent: thinkModeContainer.parentElement?.id || '无父元素',
+    defaultService: document.getElementById('defaultService')?.value || '未知服务'
+  });
+
+  // 根据模型是否为Qwen3决定是否显示思考模式选项
+  if (isQwen3Model) {
+    thinkModeContainer.style.display = 'block';
+    console.log('显示思考模式开关');
+  } else {
+    thinkModeContainer.style.display = 'none';
+    console.log('隐藏思考模式开关');
+  }
 }

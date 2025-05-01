@@ -45,6 +45,8 @@ const translations = {
     'interfaceLoadError': '界面加载错误，请刷新重试',
     'inputOpenaiKey': '请输入OpenAI API密钥',
     'inputOllamaAddress': '请输入Ollama服务器地址',
+    'enableThinkMode': '启用思考模式',
+    'thinkModeDescription': '启用后，模型将展示思考过程。关闭可提高响应速度。',
     // 语言名称
     'zh_lang': '中文 (简体)',
     'en_lang': '英文',
@@ -108,6 +110,8 @@ const translations = {
     'interfaceLoadError': 'Interface loading error, please refresh and try again',
     'inputOpenaiKey': 'Please enter OpenAI API Key',
     'inputOllamaAddress': 'Please enter Ollama server address',
+    'enableThinkMode': 'Enable Think Mode',
+    'thinkModeDescription': 'When enabled, the model will show its thinking process. Disable for faster responses.',
     // 语言名称
     'zh_lang': 'Chinese (Simplified)',
     'en_lang': 'English',

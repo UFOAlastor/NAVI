@@ -1161,7 +1161,13 @@ class SelectionHandler {
       }
     }
 
-    const selection = window.getSelection();
+    // 添加对window.getSelection的空值检查
+    const selection = window && window.getSelection ? window.getSelection() : null;
+    if (!selection) {
+      console.log('NAVI: 无法获取选择内容，window.getSelection返回null');
+      return;
+    }
+
     const selectedText = selection.toString().trim();
 
     console.log('NAVI: 选中的文本:', selectedText ? selectedText : '无');
@@ -1184,11 +1190,22 @@ class SelectionHandler {
     }
 
     // 获取源事件目标元素
-    const targetElement = event.target;
+    const targetElement = event ? event.target : null;
     console.log('NAVI: 事件目标元素:', targetElement);
+
+    // 检查selection是否有范围
+    if (!selection.rangeCount) {
+      console.log('NAVI: 选区不包含任何范围');
+      return;
+    }
 
     // 检查选区是否包含输入框元素
     const range = selection.getRangeAt(0);
+    if (!range) {
+      console.log('NAVI: 无法获取选区范围');
+      return;
+    }
+
     const walker = document.createTreeWalker(
       range.commonAncestorContainer,
       NodeFilter.SHOW_ELEMENT,
@@ -1208,7 +1225,7 @@ class SelectionHandler {
     }
 
     // 检查选中文本是否在插件结果框中
-    if (targetElement.closest('.navi-popup') || targetElement.closest('.navi-result') || targetElement.closest('.navi-trigger-button')) {
+    if (targetElement && (targetElement.closest('.navi-popup') || targetElement.closest('.navi-result') || targetElement.closest('.navi-trigger-button'))) {
       console.log('NAVI: 选中文本在插件结果框中，不触发划词');
       return;
     }
@@ -1217,21 +1234,30 @@ class SelectionHandler {
     const rect = range.getBoundingClientRect();
 
     // 检查是否在插件结果框中
-    const element = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-      ? range.commonAncestorContainer.parentElement
-      : range.commonAncestorContainer;
+    const element = range.commonAncestorContainer;
+    if (!element) {
+      console.log('NAVI: 无法获取选区的公共祖先容器');
+      return;
+    }
 
-    if (element.closest('.navi-popup') || element.closest('.navi-result') || element.closest('.navi-trigger-button')) {
+    const parentElement = element.nodeType === Node.TEXT_NODE
+      ? element.parentElement
+      : element;
+
+    if (parentElement && (parentElement.closest('.navi-popup') || parentElement.closest('.navi-result') || parentElement.closest('.navi-trigger-button'))) {
       console.log('NAVI: 选中文本在插件结果框中，不触发划词');
       return;
     }
 
     // 检查选区是否包含输入框元素
-    const rangeNodes = range.cloneContents().querySelectorAll('*');
-    for (const node of rangeNodes) {
-      if (this.isInputElement(node)) {
-        console.log('NAVI: 选区包含输入框元素，不触发划词');
-        return;
+    const rangeContents = range.cloneContents();
+    if (rangeContents) {
+      const rangeNodes = rangeContents.querySelectorAll('*');
+      for (const node of rangeNodes) {
+        if (this.isInputElement(node)) {
+          console.log('NAVI: 选区包含输入框元素，不触发划词');
+          return;
+        }
       }
     }
 

@@ -14,6 +14,8 @@ class SelectionHandler {
     this.dragStartPos = { x: 0, y: 0 };
     this.dragStartScrollPos = { x: 0, y: 0 };
     this.popupPos = { x: 0, y: 0 };
+  this._lastUiShowTs = 0; // 最近一次显示触发按钮/弹窗的时间戳
+  this._uiGraceMs = 450;  // 防抖宽限时间，避免页面脚本的紧随点击导致瞬时隐藏
     this.init();
   }
 
@@ -44,6 +46,9 @@ class SelectionHandler {
 
     document.body.appendChild(this.triggerButton);
 
+  // 监控并确保UI节点不会被页面脚本移除
+  this.ensureUiNodes();
+
     // 初始化AI服务
     const config = await this.getConfig();
     this.aiService = AIServiceFactory.createService(config.defaultService, config);
@@ -51,17 +56,29 @@ class SelectionHandler {
     // 初始化拖动功能
     this.initDraggable();
 
-    // 监听选择事件
-    document.addEventListener('mouseup', this.handleSelection.bind(this));
-    document.addEventListener('touchend', this.handleSelection.bind(this));
+  // 监听选择事件（使用捕获阶段，避免被页面 stopPropagation/阻断）
+  document.addEventListener('mouseup', this.handleSelection.bind(this), true);
+  document.addEventListener('touchend', this.handleSelection.bind(this), true);
 
-    // 监听点击事件，处理文档中的点击
-    document.addEventListener('click', (event) => {
+    // 监听点击事件，处理文档中的点击（使用捕获阶段，避免被页面阻断）
+  document.addEventListener('click', (event) => {
+      // 忽略非用户触发的合成事件，防止站点脚本的程序化点击误触发隐藏
+      if (event && event.isTrusted === false) {
+        return;
+      }
+      // 宽限时间内的外部点击不隐藏，避免站点在划词后立即触发的额外点击干扰
+      if (Date.now() - this._lastUiShowTs < this._uiGraceMs) {
+        return;
+      }
+      // 若点击位置接近我们的UI区域（触发按钮或弹窗），不隐藏
+      if (this.isNearOurUi(event)) {
+        return;
+      }
       // 检查点击是否在弹出窗口或其子元素上
       if (!this.popup.contains(event.target) && !this.triggerButton.contains(event.target)) {
         this.hidePopup();
       }
-    });
+  }, true);
 
     // 监听按下Escape键关闭弹窗
     document.addEventListener('keydown', (event) => {
@@ -94,6 +111,60 @@ class SelectionHandler {
     }, 1000);
 
     console.log('NAVI: 选择处理器初始化完成');
+  }
+
+  // 确保UI节点存在的守护（防止被站点脚本移除）
+  ensureUiNodes() {
+    try {
+      const reattach = () => {
+        if (this.popup && !document.body.contains(this.popup)) {
+          document.body.appendChild(this.popup);
+        }
+        if (this.triggerButton && !document.body.contains(this.triggerButton)) {
+          document.body.appendChild(this.triggerButton);
+        }
+      };
+
+      // 初始一次校验
+      reattach();
+
+      // 监听DOM变化
+      const observer = new MutationObserver(() => {
+        reattach();
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+
+      // 保存以便将来需要可断开（当前不暴露更改行为，保持逻辑不变）
+      this._uiObserver = observer;
+    } catch (e) {
+      console.warn('NAVI: 启用UI守护失败，不影响功能:', e);
+    }
+  }
+
+  // 判断点击是否接近我们的UI，避免被页面附近浮层干扰
+  isNearOurUi(event) {
+    try {
+      const x = event.clientX;
+      const y = event.clientY;
+      const expand = 16; // 16px 扩展范围
+
+      // 检查触发按钮
+      if (this.triggerButton && this.triggerButton.style.display !== 'none') {
+        const r = this.triggerButton.getBoundingClientRect();
+        if (x >= r.left - expand && x <= r.right + expand && y >= r.top - expand && y <= r.bottom + expand) {
+          return true;
+        }
+      }
+
+      // 检查弹窗
+      if (this.popup && this.popup.style.display === 'block') {
+        const r2 = this.popup.getBoundingClientRect();
+        if (x >= r2.left - expand && x <= r2.right + expand && y >= r2.top - expand && y <= r2.bottom + expand) {
+          return true;
+        }
+      }
+    } catch (_) {}
+    return false;
   }
 
   async getConfig() {
@@ -261,6 +332,9 @@ class SelectionHandler {
     this.triggerButton.style.top = `${top}px`;
     this.triggerButton.style.left = `${left}px`;
     this.triggerButton.style.display = 'flex';
+
+  // 记录最近一次显示时间，用于点击隐藏的宽限判断
+  this._lastUiShowTs = Date.now();
   }
 
   // 隐藏触发按钮
@@ -819,6 +893,8 @@ class SelectionHandler {
     this.popup.style.top = `${top}px`;
     this.popup.style.left = `${left}px`;
     this.popup.style.display = 'block';
+  // 记录最近显示时间，防止站点紧随点击误关
+  this._lastUiShowTs = Date.now();
   }
 
   formatResult(result) {
@@ -1149,11 +1225,20 @@ class SelectionHandler {
       this.wasDragging = false;
       return;
     }
+          // 宽限时间内的外部点击不隐藏，避免站点在划词后立即触发的额外点击干扰
+          if (Date.now() - this._lastUiShowTs < this._uiGraceMs) {
+            return;
+          }
+
+          // 若点击位置接近我们的UI区域（触发按钮或弹窗），不隐藏
+          if (this.isNearOurUi(event)) {
+            return;
+          }
 
     console.log('NAVI: 划词事件被触发');
 
     // 获取划词起点元素
-    if (event && event.clientX && event.clientY) {
+    if (event && event.clientX != null && event.clientY != null) {
       const startElement = document.elementFromPoint(event.clientX, event.clientY);
       if (startElement && this.isInputElement(startElement)) {
         console.log('NAVI: 划词起点在输入框内，不处理');

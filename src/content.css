@@ -29,8 +29,8 @@
 
 /* 基础弹窗样式 */
 .navi-popup {
-  position: absolute;
-  z-index: 999999;
+  position: absolute !important;
+  z-index: 2147483647 !important; /* 顶层显示，避免被站点浮层遮挡 */
   background: var(--navi-color-background);
   border-radius: var(--navi-border-radius-lg);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
@@ -42,6 +42,7 @@
   color: var(--navi-color-text);
   border: 1px solid var(--navi-color-border);
   user-select: none;
+  pointer-events: auto !important;
   transition: border-color 0.3s ease;
 }
 
@@ -88,8 +89,8 @@
 
 /* 触发按钮样式 */
 .navi-trigger-button {
-  position: absolute;
-  z-index: 999999;
+  position: absolute !important;
+  z-index: 2147483647 !important;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
-import { CacheManager, RateLimiter, RetryManager, ResultProcessor } from '../utils/ai-utils';
+import { CacheManager, RateLimiter, RetryManager } from '../utils/ai-utils';
+import { buildTranslatePrompt, buildExplainPrompt } from '../utils/prompts';
 
 // AI服务接口基类
 class AIService {
@@ -186,58 +187,20 @@ class OpenAIService extends AIService {
 
       secondaryTargetLang = secondaryTargetLang || 'en';
 
-      // 准备智能提示，根据主选和次选语言动态调整
-      let prompt = "";
-
-      // 检查模型是否为Qwen3系列，并根据思考模式设置添加/no_think标记
-      const isQwen3Model = this.model.toLowerCase().includes('qwen3');
-      const shouldDisableThinking = isQwen3Model && this.config?.generalConfig?.enableThinkMode !== true;
-
-      if (shouldDisableThinking) {
-        prompt += `/no_think\n`;
-      }
-
-      prompt += `你是一个专业的翻译和分析助手, 请完成以下任务:
-1. 翻译文本, 若文本已经是${targetLang}语言则翻译成${secondaryTargetLang}语言, 否则翻译成${targetLang}语言.
-`;
-
-      // 如果启用了显示领域，则添加领域分析任务
-      if (this.config?.generalConfig?.showDomain !== false) {
-        prompt += `2. 分析专业领域, 始终使用${targetLang}语言回复.
-`;
-      }
-
-      prompt += `${this.config?.generalConfig?.showDomain !== false ? '3' : '2'}. 提供简短易懂的解释, 始终使用${targetLang}语言回复.
-
-严格按照以下格式回复, 保持标记完全不变:
-
-<TRANSLATION>
-
-`;
-
-      if (this.config?.generalConfig?.showDomain !== false) {
-        prompt += `<DOMAIN>
-
-`;
-      }
-
-      prompt += `<EXPLANATION>
-
-以下为需要处理的文本:
-${text}
-`;
+      const { system, user } = buildTranslatePrompt({
+        targetLang,
+        secondaryTargetLang,
+        showDomain: this.config?.generalConfig?.showDomain !== false,
+        enableThinkMode: this.config?.generalConfig?.enableThinkMode === true,
+        model: this.model,
+        text
+      });
 
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
-          {
-            role: "system",
-            content: prompt
-          },
-          {
-            role: "user",
-            content: text
-          }
+          { role: "system", content: system },
+          { role: "user", content: user }
         ],
         temperature: 0.3,
         stream: true
@@ -296,17 +259,17 @@ ${text}
         timestamp: Date.now()
       };
 
+      const { system, user } = buildExplainPrompt({
+        enableThinkMode: this.config?.generalConfig?.enableThinkMode === true,
+        model: this.model,
+        text
+      });
+
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
-          {
-            role: "system",
-            content: "你是一个专业的解释助手。请对以下文本进行一句话简短解释，确保通俗易懂，让外行人士也能理解。禁止长篇大论，禁止分点分段，只能用一句话概括。"
-          },
-          {
-            role: "user",
-            content: text
-          }
+          { role: "system", content: system },
+          { role: "user", content: user }
         ],
         temperature: 0.3,
         stream: true
@@ -660,46 +623,14 @@ class OllamaService extends AIService {
   async translateStream(text, targetLang, onChunk, onComplete, secondaryTargetLang) {
     return this.withCache('translate', text, { targetLang, secondaryTargetLang }, async () => {
       try {
-        // 准备智能提示，根据主选和次选语言动态调整
-        let prompt = "";
-
-        // 检查模型是否为Qwen3系列，并根据思考模式设置添加/no_think标记
-        const isQwen3Model = this.model.toLowerCase().includes('qwen3');
-        const shouldDisableThinking = isQwen3Model && this.config?.generalConfig?.enableThinkMode !== true;
-
-        if (shouldDisableThinking) {
-          prompt += `/no_think\n`;
-        }
-
-        prompt += `你是一个专业的翻译和分析助手, 请完成以下任务:
-1. 翻译文本, 若文本已经是${targetLang}语言则翻译成${secondaryTargetLang}语言, 否则翻译成${targetLang}语言.
-`;
-
-        // 如果启用了显示领域，则添加领域分析任务
-        if (this.config?.generalConfig?.showDomain !== false) {
-          prompt += `2. 分析专业领域, 始终使用${targetLang}语言回复.
-`;
-        }
-
-        prompt += `${this.config?.generalConfig?.showDomain !== false ? '3' : '2'}. 提供简短易懂的解释, 始终使用${targetLang}语言回复.
-
-严格按照以下格式回复, 保持标记完全不变:
-
-<TRANSLATION>
-
-`;
-
-        if (this.config?.generalConfig?.showDomain !== false) {
-          prompt += `<DOMAIN>
-
-`;
-        }
-
-        prompt += `<EXPLANATION>
-
-以下为需要处理的文本:
-${text}
-`;
+        const { combined: prompt } = buildTranslatePrompt({
+          targetLang,
+          secondaryTargetLang,
+          showDomain: this.config?.generalConfig?.showDomain !== false,
+          enableThinkMode: this.config?.generalConfig?.enableThinkMode === true,
+          model: this.model,
+          text
+        });
 
         console.log('Ollama请求翻译:', text, '主选语言:', targetLang, '次选语言:', secondaryTargetLang);
 
@@ -860,17 +791,11 @@ ${text}
   async explainStream(text, onChunk, onComplete) {
     return this.withCache('explain', text, {}, async () => {
       try {
-        // 检查模型是否为Qwen3系列，并根据思考模式设置添加/no_think标记
-        let prompt = "";
-
-        const isQwen3Model = this.model.toLowerCase().includes('qwen3');
-        const shouldDisableThinking = isQwen3Model && this.config?.generalConfig?.enableThinkMode !== true;
-
-        if (shouldDisableThinking) {
-          prompt += `/no_think\n`;
-        }
-
-        prompt += `请对以下文本进行一句话简短解释，确保通俗易懂，让外行人士也能理解。禁止长篇大论，禁止分点分段，只能用一句话概括：\n${text}`;
+        const { combined: prompt } = buildExplainPrompt({
+          enableThinkMode: this.config?.generalConfig?.enableThinkMode === true,
+          model: this.model,
+          text
+        });
 
         let resultObj = {
           explanation: "",
@@ -1030,57 +955,7 @@ ${text}
   }
 }
 
-// 辅助函数：从文本中提取标记之间的内容
-function extractContent(text, startMarker, endMarker) {
-  try {
-    // 处理可能的变体形式 (如===翻译 开始===)
-    const startVariations = [
-      startMarker,
-      startMarker.replace("开始", " 开始"),
-      startMarker.replace("===", ""),
-      startMarker.replace("===", "").replace("开始", ""),
-      startMarker.replace("开始", ":")
-    ];
-
-    const endVariations = [
-      endMarker,
-      endMarker.replace("结束", " 结束"),
-      endMarker.replace("===", ""),
-      endMarker.replace("===", "").replace("结束", "")
-    ];
-
-    // 尝试所有可能的变体组合
-    for (const start of startVariations) {
-      if (!text.includes(start)) continue;
-
-      const contentStart = text.indexOf(start) + start.length;
-
-      for (const end of endVariations) {
-        if (!text.includes(end)) continue;
-
-        const endIndex = text.indexOf(end, contentStart);
-        if (endIndex !== -1) {
-          return text.substring(contentStart, endIndex).trim();
-        }
-      }
-
-      // 如果找到起始标记但没有找到结束标记
-      // 返回从起始标记到下一个标记或文本结尾的内容
-      const nextMarkerIndex = text.indexOf("===", contentStart);
-      if (nextMarkerIndex !== -1) {
-        return text.substring(contentStart, nextMarkerIndex).trim();
-      } else {
-        // 没有找到下一个标记，返回所有剩余内容
-        return text.substring(contentStart).trim();
-      }
-    }
-
-    return "";
-  } catch (e) {
-    console.error('提取内容异常:', e);
-    return "";
-  }
-}
+// 已清理：历史遗留的 extractContent 函数已移除（未被使用）
 
 // AI服务工厂
 class AIServiceFactory {

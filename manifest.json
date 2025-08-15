@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "zh",
   "name": "NAVI - Smart Text Selection Assistant",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "description": "Intelligent text selection translation and explanation tool supporting multiple AI platforms and local models",
   "permissions": [
     "storage",
